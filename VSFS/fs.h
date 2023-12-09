@@ -27,13 +27,29 @@
 #define INODE_TABLE_START 3				//Start Position 3*BLOCKSIZE
 
 //File
-#define MAX_FILE_SIZE 256 
-
+#define MAX_FILE_SIZE 224
+#define FILEENT_PER_BLOCK 16
+#define MAX_FILE_NAME 20
 
 #define INODE_BITMAP_START 1
 #define DATA_BITMAP_START 2
 #define SUPERBLOCK_START 0
 #define SUPERBLOCK_SIZE (BLOCK_SIZE)
+
+#define MODE_DIR	01000					
+#define MODE_FILE	00000					
+#define OWNER_R	4<<6						
+#define OWNER_W	2<<6						
+#define OWNER_X	1<<6						
+#define GROUP_R	4<<3						
+#define GROUP_W	2<<3						
+#define GROUP_X	1<<3						
+#define OTHERS_R	4						
+#define OTHERS_W	2						
+#define OTHERS_X	1						
+#define FILE_DEF_PERMISSION 0664			
+#define DIR_DEF_PERMISSION	0755			
+
 
 struct SuperBlock
 {
@@ -41,8 +57,6 @@ struct SuperBlock
 	uint size;				//Size of FileSystem
 	uint nBlocks;			//Total number of block 
 	uint nInodes;			//Total number of inode
-	uint emptyBlock;
-	uint emptyInode;
 	uint blockStart;		//block start
 	uint inodeStart;		//inode_table start 
 	uint bmapSize;			// (nBlocks + BITS_PER_BYTE - 1) / BITS_PER_BYTE;
@@ -51,8 +65,7 @@ struct SuperBlock
 	uint bmapStart;			//data bitmap start address
 };
 
-struct inode{
-	uint type;			//dir or file
+struct inode{ 
 	uint mode;			//Privilege For File r-read w-write x-exec
 	uint inum;			//inode number 
 	uint fileSize;		//Size of File
@@ -66,17 +79,24 @@ struct inode{
 	time_t mtime;		//modify time
 
 	uint dirBlock[IPB];	//refs to physical block position
+	uint IdirBlock;
 };
 
 
 #define DIR_SIZE 28
 
-struct dirent {				//32B
-	uint inum;				//inode number
+struct Dirent {				//32B
+	uint iaddr;				//address of relate inode number
 	char name[DIR_SIZE];	//Name of dirent
 };
 
-//全局变量定义
+struct FileEnt {				//256B     dirent(32B) + file_content(224B);
+	Dirent dir;
+	char buffer[MAX_FILE_SIZE];
+};
+
+
+//global variable defination
 extern const int Superblock_StartAddr;		
 extern const int InodeBitmap_StartAddr;		
 extern const int BlockBitmap_StartAddr;		
@@ -85,7 +105,7 @@ extern const int Block_StartAddr;
 extern const int File_Max_Size;				
 extern const int Sum_Size;					
 
-// 用户
+// user information
 extern bool isLogin;						//user state fot login
 extern int nextUID;							//next uid
 extern int nextGID;							//next group id
@@ -101,5 +121,11 @@ extern FILE* fw;							//file write pointer
 extern FILE* fr;							//file read pointer
 extern SuperBlock* superblock;				//super block pointer 
 
-extern char Sys_buffer[SYS_SIZE];				//64M
+extern char Sys_buffer[SYS_SIZE];			//64M
+
+int BlockAlloc();
+int InodeAlloc();
+bool BlockFree(int address);
+bool InodeFree(int address);
+
 #endif

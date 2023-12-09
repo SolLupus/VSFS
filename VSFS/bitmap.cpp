@@ -40,7 +40,7 @@ void print_block_bitmap(uint8_t* bmap, uint bmapSize)
 
 int allocate_inode(struct SuperBlock* sb, uint8_t* imap)
 {
-    for (uint i = 0; i < sb->nBlocks; ++i)
+    for (uint i = 0; i < sb->nInodes; ++i)
     {
         if (!GET_BIT(imap, i))
         {
@@ -54,7 +54,7 @@ int allocate_inode(struct SuperBlock* sb, uint8_t* imap)
 
 void free_inode(struct SuperBlock* sb, uint8_t* imap, uint InodeIndex)
 {
-    if (InodeIndex < sb->nBlocks)
+    if (InodeIndex < sb->nInodes)
     {
         SET_BIT(imap, InodeIndex);
     }
