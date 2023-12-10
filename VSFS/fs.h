@@ -5,10 +5,11 @@
 #include "type.h"
 #include <cstdio>
 #include <cstdint>
+#include <pthread.h>
 
 
 #define MAGIC 0x10203040
-#define FILESYSNAME "So1VFSF.sys"
+#define FILESYSNAME "So1_VFSF.sys"
 #define SYSNAME "So1's VSVF"
 
 
@@ -36,6 +37,7 @@
 #define SUPERBLOCK_START 0
 #define SUPERBLOCK_SIZE (BLOCK_SIZE)
 
+//File privilege
 #define MODE_DIR	01000					
 #define MODE_FILE	00000					
 #define OWNER_R	4<<6						
@@ -49,6 +51,9 @@
 #define OTHERS_X	1						
 #define FILE_DEF_PERMISSION 0664			
 #define DIR_DEF_PERMISSION	0755			
+
+//User information
+#define MAX_NAME_SIZE 20
 
 
 struct SuperBlock
@@ -66,6 +71,7 @@ struct SuperBlock
 };
 
 struct inode{ 
+	pthread_rwlock_t lock;
 	uint mode;			//Privilege For File r-read w-write x-exec
 	uint inum;			//inode number 
 	uint fileSize;		//Size of File
@@ -93,6 +99,7 @@ struct Dirent {				//32B
 struct FileEnt {				//256B     dirent(32B) + file_content(224B);
 	Dirent dir;
 	char buffer[MAX_FILE_SIZE];
+	pthread_rwlock_t lock;
 };
 
 
@@ -123,9 +130,14 @@ extern SuperBlock* superblock;				//super block pointer
 
 extern char Sys_buffer[SYS_SIZE];			//64M
 
-int BlockAlloc();
-int InodeAlloc();
-bool BlockFree(int address);
-bool InodeFree(int address);
-
+int BlockAlloc();							//allocate empty block
+int InodeAlloc();							//allocate empty inode
+bool BlockFree(int address);				//free block
+bool InodeFree(int address);				//free inode
+int extractPath(char path[]);				//path parser -> return target inodeaddress
+char* extractLastPath(char path[]);
+void initLock(struct inode node);
+void destroyLock(struct inode node);
+void initFileEntLock(struct FileEnt fileEnt);
+void destroyFileEntLock(struct FileEnt fileEnt);
 #endif

@@ -9,27 +9,24 @@ bool login(char[]);
 void logout();												
 bool useradd(char username[]);								
 bool userdel(char username[]);								
-void chmod(int parinoAddr, char name[], int pmode);			
-void touch(int parinoAddr, char name[], char buf[]);		
-bool mkdir(int parinoAddr, char name[]);					
-bool rmdir(int parinoAddr, char name[]);					
-bool rm(int parinoAddr, char name[]);						
-void ls(int parinoaddr);									
-void cd(int parinoaddr, char name[]);						
-void vim(int parinoaddr, char name[], char buf[]);			
+void chmod(char name[], int pmode);			
+void touch(char name[]);		
+bool mkdir(char name[]);										
+bool rm(char name[]);						
+void ls(char name[]);
+void cd(char name[]);						
+void vim(char name[], char buf[]);			
 void clear();												
 void pwd();													
-void cat(int parinoAddr, char name[]);
+void cat(char name[]);
 void cmd(char cmdline[]);
 
 
 void inputUsername(char username[]);							
 void inputPassword(char passwd[]);								
 void gotoxy(HANDLE hOut, int x, int y);							
-void writeFile(inode fileInode, int fileInodeAddr, char buf[]);	
 bool check(char username[], char passwd[]);						
-void gotoRoot();												
-void rmall(int parinoAddr);										
+void gotoRoot();																					
 bool create(int parinoAddr, char name[], char buf[]);
 
 void help();													

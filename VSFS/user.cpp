@@ -1,10 +1,11 @@
 #include "user.h"
 #include "fs.h"
+#include "bitmap.h"
 #include <conio.h>
 
 
 
-void InitUser()
+void InitUser()  //modify
 {
 	cout << "Please type the root password!" << endl;
 	bool ok = false;
@@ -22,13 +23,10 @@ void InitUser()
 	} while (!ok);
 
 
-	mkdir(Root_Dir_Addr, "home");
-	cd(Root_Dir_Addr, "home");
-	mkdir(Cur_Dir_Addr, "root");
+	mkdir("/home");
+	mkdir("/home/root");
 
-	cd(Cur_Dir_Addr, "..");
-	mkdir(Cur_Dir_Addr, "etc");	
-	cd(Cur_Dir_Addr, "etc");
+	mkdir("/etc");
 
 	char buf[100] = { 0 };
 
@@ -40,22 +38,59 @@ void InitUser()
 	strcat(s_passwd, password1);
 	strcat(s_passwd, "\n");
 
-	sprintf(buf, s_passwd);	
+	sprintf(buf, s_passwd);
 
 	create(Cur_Dir_Addr, "shadow", buf);
-	chmod(Cur_Dir_Addr, "shadow", 0660);	
+	chmod("/etc/shadow", 0660);
 
-	sprintf(buf, "root::0:root\n");	
-	sprintf(buf + strlen(buf), "user::1:\n");	
+	sprintf(buf, "root::0:root\n");
+	sprintf(buf + strlen(buf), "user::1:\n");
 	create(Cur_Dir_Addr, "group", buf);
 
-	cd(Cur_Dir_Addr, "..");	
+	cd("/");
 }
 
-bool login(char[]) //todo
+bool login(char username[]) //todo
 {
-	return false;
+	char password[100] = { 0 };
+
+	if (strlen(username) >= MAX_NAME_SIZE) {
+		cout << "The username is too long." << endl;
+		return false;
+	}
+	if (isLogin == true) {
+		cout << "You have already logged in." << endl;
+		return false;
+	}
+
+	// 用户名
+	if (strcmp(username, "") == 0) {
+		inputUsername(username);
+		// 判空
+		if (strcmp(username, "") == 0) {
+			cout << "Username can not be empty." << endl;
+			return false;
+		}
+	}
+
+	//输入用户密码
+	inputPassword(password);
+	// 判空
+	if (strcmp(password, "") == 0) {
+		cout << "Password can not be empty." << endl;
+		return false;
+	}
+
+	if (check(username, password)) {	//核对用户名和密码
+		isLogin = true;
+		return true;
+	}
+	else {
+		isLogin = false;
+		return false;
+	}
 }
+
 
 void logout()
 {
@@ -79,27 +114,78 @@ bool userdel(char username[]) //todo
 	return false;
 }
 
-void chmod(int parinoAddr, char name[], int pmode) //todo
+void chmod(char name[], int pmode)
 {
+	if (strlen(name) > MAX_FILE_SIZE) {
+		cout << "Name is too long"<<endl;
+		return;
+	}
+	if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0) {
+		cout << "Operation error." << endl;
+		return;
+	}
+	int parinoaddr = extractPath(name);
+	char* fileName = extractLastPath(name);
+	if (parinoaddr == -1 ) {
+		cout << "Non-existent Target.";
+		return;
+	}
+	inode cur = { 0 };
+	fseek(fr, parinoaddr, SEEK_SET);
+	fread(&cur, sizeof(cur), 1, fr);
+	fflush(fr);
+	
+	if (cur.uname == Cur_User_Name) {
+		pthread_rwlock_wrlock(&cur.lock);
+		cur.mode = (cur.mode >> 9 << 9) | pmode;
+		fseek(fw, parinoaddr, SEEK_SET);
+		fwrite(&cur, sizeof(cur), 1, fw);
+		pthread_rwlock_unlock(&cur.lock);
+		return;
+	}
+	else if (cur.gname == Cur_Group_Name) {
+		pthread_rwlock_wrlock(&cur.lock);
+		cur.mode = (cur.mode >> 9 << 9) | pmode;
+		fseek(fw, parinoaddr, SEEK_SET);
+		fwrite(&cur, sizeof(cur), 1, fw);
+		pthread_rwlock_unlock(&cur.lock);
+		return;
+	}
+	else {
+		cout << "No Permission!" << endl;
+		return;
+	}
 }
 
-void touch(int parinoAddr, char name[], char buf[]) //todo
+void touch(char name[]) //todo
 {
+	if (strlen(name) > FILENAME_MAX) {
+		cout << "File name too long." << endl;
+		return;
+	}
 }
 
-bool mkdir(int parinoAddr, char name[])
+bool mkdir(char name[])
 {
 	if (strlen(name) > MAX_FILE_NAME) {
 		cout << "The directory name is too long." << endl;
 		return false;
 	}
-
+	char tmpName[30],dirName[30];
+	strcpy_s(tmpName, name);
+	strcpy_s(dirName, extractLastPath(name));
+	strcat(tmpName, "/..");
+	int parinoAddr = extractPath(tmpName);
+	if (parinoAddr == -1) {
+		cout << "Can't mkdir at Non-existent path." << endl;
+		return false;
+	}
 	//new dirent
 	int blockAddress = BlockAlloc();
 	int newInodeAddress = InodeAlloc();
 	if (blockAddress != -1 && newInodeAddress != -1) {
 		Dirent dir = { 0 };
-		strcpy_s(dir.name, name);
+		strcpy_s(dir.name, dirName);
 		dir.iaddr = newInodeAddress;
 		inode New = { 0 };
 		New.inum = (newInodeAddress - Inode_StartAddr) / INODE_SIZE;
@@ -107,6 +193,7 @@ bool mkdir(int parinoAddr, char name[])
 		for (int i = 1; i < IPB; i++) {
 			New.dirBlock[i] = -1;
 		}
+		initLock(New);
 		New.fileSize = 0;
 		New.refCnt = 0;
 		New.IdirBlock = -1;
@@ -121,6 +208,20 @@ bool mkdir(int parinoAddr, char name[])
 		inode cur = { 0 };
 		fseek(fr, parinoAddr, SEEK_SET);
 		fread(&cur, sizeof(inode), 1, fr);
+		fflush(fr);
+		int filemode;
+		if (strcmp(Cur_User_Name, cur.uname) == 0)
+			filemode = 6;
+		else if (strcmp(Cur_Group_Name, cur.gname) == 0)
+			filemode = 3;
+		else
+			filemode = 0;
+
+		if (((cur.mode >> filemode >> 1) & 1) == 0) {
+			cout << "Permission Denied" << endl;
+			return;
+		}
+
 		cur.refCnt = cur.refCnt + 1;
 
 		//get current file entry
@@ -131,7 +232,7 @@ bool mkdir(int parinoAddr, char name[])
 
 		//check whehter there is same name file
 		for (int i = 0; i < FILEENT_PER_BLOCK; i++) {
-			if (strcmp(curFileEnt[i].dir.name, name) == 0) {
+			if (strcmp(curFileEnt[i].dir.name, dirName) == 0) {
 				cout << "File of this name is already exist!" << endl;
 				return false;
 			}
@@ -150,7 +251,7 @@ bool mkdir(int parinoAddr, char name[])
 		newFileEnt[0].dir = dir;
 		strcpy_s(newFileEnt[0].buffer, 0);
 		newFileEnt[1].dir = curFileEnt[0].dir;
-		strcpy_s(newFileEnt[1].dir.name,"..");
+		strcpy_s(newFileEnt[1].dir.name, "..");
 		fseek(fw, New.dirBlock[0], SEEK_SET);
 		fwrite(newFileEnt, sizeof(newFileEnt), 1, fw);
 		fseek(fw, dir.iaddr, SEEK_SET);
@@ -165,18 +266,80 @@ bool mkdir(int parinoAddr, char name[])
 
 }
 
-bool rmdir(int parinoAddr, char name[]) //todo
+bool rm(char name[])
 {
+	int parinoaddr = extractPath(name);
+	if (parinoaddr == -1) {
+		cout << "No such file or dictionary." << endl;
+		return false;
+	}
+	char* fileName = extractLastPath(name);
+	//get current inode
+	inode cur = { 0 };
+	fseek(fr, parinoaddr, SEEK_SET);
+	fread(&cur, sizeof(inode), 1, fr);
+	fflush(fr);
+
+	int filemode;
+	if (strcmp(Cur_User_Name, cur.uname) == 0)
+		filemode = 6;
+	else if (strcmp(Cur_Group_Name, cur.gname) == 0)
+		filemode = 3;
+	else
+		filemode = 0;
+
+	if (((cur.mode >> filemode >> 1) & 1) == 0) {
+		cout << "Permission Denied" << endl;
+		return false;
+	}
+
+	if (((cur.mode >> 9) & 1) == 0) { //file
+		FileEnt fileEnt[FILEENT_PER_BLOCK] = { 0 };
+		fseek(fr, cur.dirBlock[0], SEEK_SET);
+		fread(fileEnt, sizeof(fileEnt), 1, fr);
+		fflush(fr);
+		for (int i = 0; i < FILEENT_PER_BLOCK; i++) {
+			if (fileEnt[i].dir.name == fileName) {
+				fseek(fw, cur.dirBlock[0]+i*sizeof(FileEnt), SEEK_SET);
+				fwrite(0, sizeof(FileEnt), 1, fw);
+				fseek(fw, parinoaddr, SEEK_SET);
+				fwrite(0, sizeof(INODE_SIZE), 1, fw);
+				fflush(fw);
+				free_inode(superblock, imap, (parinoaddr - Inode_StartAddr) / INODE_SIZE);
+				break;
+			}
+		}
+		return true;
+	}
+	else {						//dictionary
+		int start = cur.dirBlock[0];
+		FileEnt fileEnt[FILEENT_PER_BLOCK] = { 0 };
+		fseek(fr, start, SEEK_SET);
+		fread(fileEnt, sizeof(fileEnt), 1, fr);
+		fflush(fr);
+		for (int i = 0; i < FILEENT_PER_BLOCK; i++) {
+			if (fileEnt[i].dir.name != "..") {
+				fseek(fw, fileEnt[i].dir.iaddr, SEEK_SET);
+				fwrite(0, sizeof(INODE_SIZE), 1, fw);
+				free_inode(superblock, imap, (fileEnt[i].dir.iaddr - Inode_StartAddr) / INODE_SIZE);
+			}
+		}
+		fseek(fw, start, SEEK_SET);
+		fwrite(0, sizeof(fileEnt), 1, fw);
+		fflush(fw);
+		free_block(superblock, bmap, (start - Block_StartAddr) / BLOCK_SIZE);
+		return true;
+	}
 	return false;
 }
 
-bool rm(int parinoAddr, char name[])	//todo
+void ls(char name[])
 {
-	return false;
-}
-
-void ls(int parinoaddr)
-{
+	int parinoaddr = extractPath(name);
+	if (parinoaddr == -1) {
+		cout << "No such path." << endl;
+		return;
+	}
 	//get current inode
 	inode cur = { 0 };
 	fseek(fr, parinoaddr, SEEK_SET);
@@ -203,17 +366,90 @@ void ls(int parinoaddr)
 	}
 
 	for (int i = 0; i < FILEENT_PER_BLOCK; i++) {
-		
+		Dirent dir = curFileEnt[i].dir;
+		inode tmp = { 0 };
+		fseek(fr, dir.iaddr, SEEK_SET);
+		fread(&tmp, sizeof(inode), 1, fr);
+		fflush(fr);
+		if (dir.name == "0")
+			continue;
+		if (((tmp.mode >> 9) & 1) == 1) {
+			printf("d");
+		}
+		else {
+			printf("-");
+		}
+
+		//for time loaded
+		tm* ptr;	
+		ptr = gmtime(&tmp.mtime);
+
+		//file privilege information
+		int t = 8;
+		while (t >= 0) {
+			if (((tmp.mode >> t) & 1) == 1) {
+				if (t % 3 == 2)	printf("r");
+				if (t % 3 == 1)	printf("w");
+				if (t % 3 == 0)	printf("x");
 	}
+			else {
+				printf("-");
+			}
+			t--;
+}
+		printf(" ");
 
-
-}   //todo
-
-void cd(int parinoaddr, char name[])	//todo
-{
+		printf("%d ", tmp.refCnt);	
+		printf("%s ", tmp.uname);	
+		printf("%s\t", tmp.gname);	
+		printf("%d B\t", tmp.fileSize);
+		printf("%d.%d.%d %02d:%02d:%02d  ", 1900 + ptr->tm_year, ptr->tm_mon + 1, ptr->tm_mday, (8 + ptr->tm_hour) % 24, ptr->tm_min, ptr->tm_sec);
+		if (i == 0)
+			printf(".");
+		else
+			printf("%s", dir.name);	//filename
+		printf("\n");
+	}
 }
 
-void vim(int parinoaddr, char name[], char buf[])	//todo
+void cd(char name[])
+{
+	if (strlen(name) > MAX_FILE_NAME) {
+		cout << "The directory name is too long." << endl;
+		return;
+	}
+	if (strcmp(name, "")) {
+		cout << "The argument can't be empty." << endl;
+		return;
+	}
+	if (strcmp(name, ".")) {
+		return;
+	}
+	int parinoaddr = extractPath(name);
+	if (parinoaddr != -1) {
+		inode cur = { 0 };
+		FileEnt fileEnt[FILEENT_PER_BLOCK] = { 0 };
+		fseek(fr, parinoaddr, SEEK_SET);
+		fread(&cur, sizeof(inode), 1, fr);
+		fflush(fr);
+		if (((cur.mode >> 9) & 1) == 0) {
+			cout << "Please input dir instead of file as argument";
+			return;
+		}
+		fseek(fr, cur.dirBlock[0], SEEK_SET);
+		fread(fileEnt, sizeof(fileEnt), 1, fr);
+		fflush(fr);
+		strcpy_s(Cur_Dir_Name, fileEnt[0].dir.name);
+		Cur_Dir_Addr = cur.dirBlock[0];
+		return;
+	}
+	else {
+		printf("cd %s : No such file or directory.\n", name);
+		return;
+	}
+}
+
+void vim(char name[], char buf[])	//todo
 {
 }
 
@@ -231,9 +467,49 @@ void pwd()
 	printf("%s\n", Cur_Dir_Name);
 }
 
-void cat(int parinoAddr, char name[])
+void cat(char name[])
 {
-} //todo
+	int parinoaddr = extractPath(name);
+	if (parinoaddr == -1) {
+		cout << "No such file" << endl;
+		return;
+	}
+	char* fileName = extractLastPath(name);
+	inode cur = { 0 };
+	fseek(fr, parinoaddr, SEEK_SET);
+	fread(&cur, sizeof(inode), 1, fr);
+	fflush(fr);
+	pthread_rwlock_rdlock(&(cur.lock));
+
+	int filemode;
+	if (strcmp(Cur_User_Name, cur.uname) == 0)
+		filemode = 6;
+	else if (strcmp(Cur_Group_Name, cur.gname) == 0)
+		filemode = 3;
+	else
+		filemode = 0;
+
+	if (((cur.mode >> filemode >> 2) & 1) == 0) {
+		cout << "Permission Denied" << endl;
+		pthread_rwlock_unlock(&(cur.lock));
+		return;
+	}
+
+	FileEnt fileEnt[FILEENT_PER_BLOCK] = { 0 };
+	fseek(fr, cur.dirBlock[0], SEEK_SET);
+	fread(fileEnt, sizeof(fileEnt), 1, fr);
+	fflush(fr);
+	for (int i = 0; i < FILEENT_PER_BLOCK; i++) {
+		if (fileEnt[i].dir.name == fileName) {
+			pthread_rwlock_rdlock(&fileEnt[i].lock);
+			printf("%s\n", fileEnt[i].buffer);
+			pthread_rwlock_unlock(&fileEnt[i].lock);
+			break;
+		}
+	}
+	pthread_rwlock_unlock(&(cur.lock));
+	return;
+} 
 
 void cmd(char cmdline[])
 {
@@ -484,8 +760,8 @@ void inputPassword(char passwd[])
 void gotoxy(HANDLE hOut, int x, int y)
 {
 	COORD pos;
-	pos.X = x;             //横坐标
-	pos.Y = y;            //纵坐标
+	pos.X = x;            
+	pos.Y = y;        
 	SetConsoleCursorPosition(hOut, pos);
 }
 
@@ -495,7 +771,7 @@ bool check(char username[], char passwd[]) //todo
 	return false;
 }
 
-void gotoRoot()	//todo
+void gotoRoot()
 {
 	memset(Cur_User_Name, 0, sizeof(Cur_User_Name));		//clear current username
 	memset(Cur_User_Dir_Name, 0, sizeof(Cur_User_Dir_Name));	//clear current User Dic name
@@ -503,26 +779,16 @@ void gotoRoot()	//todo
 	strcpy(Cur_Dir_Name, "/");		//set current dir as "/"
 }
 
-void rmall(int parinoAddr) //todo
-{
-}
-
 
 void WriteFile(inode fileInode, int fileInodeAddr, char buf[]) //todo to be determined
 {
 }
 
-bool Check(char username[], char passwd[])	//todo
-{
-	return false;
-}  
-
-
 
 bool create(int parinoAddr, char name[], char buf[])//todo
 {
 	return false;
-} 
+}
 
 
 void Help_NotLogin() {
@@ -558,7 +824,6 @@ void help()
 	Clear_help();
 	Exit_help();
 }
-
 
 
 void Command_help() {
