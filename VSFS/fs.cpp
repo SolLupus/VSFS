@@ -4,10 +4,6 @@
 using namespace std;
 
 
-
-void initLock(inode node) {
-	pthread_rwlock_init(&(node.lock), NULL);
-}
 //ReadLock
 //read pthread_rwlock_rdlock(&(node.lock));
 // ...
@@ -18,7 +14,9 @@ void initLock(inode node) {
 //pthread_rwlock_wrlock(&(node.lock));
 // ...
 //pthread_rwlock_unlock(&(node.lock));
-
+void initLock(inode node) {
+	pthread_rwlock_init(&(node.lock), NULL);
+}
 void destroyLock(inode node) {
 	pthread_rwlock_destroy(&(node.lock));
 }
@@ -74,7 +72,7 @@ bool InodeFree(int address)
 }
 
 //Allocate Block
-int BlockAlloc() {			
+int BlockAlloc() {
 	int position;
 	position = allocate_block(superblock, bmap);
 	if (position == -1) {
@@ -100,8 +98,8 @@ bool BlockFree(int bnum) {
 	fseek(fw, BlockBitmap_StartAddr, SEEK_SET);
 	fwrite(bmap, sizeof(bmap), 1, fw);
 
-	char buffer[BLOCK_SIZE] = {0};
-	fseek(fw, Block_StartAddr+bnum*BLOCK_SIZE, SEEK_SET);
+	char buffer[BLOCK_SIZE] = { 0 };
+	fseek(fw, Block_StartAddr + bnum * BLOCK_SIZE, SEEK_SET);
 	fwrite(buffer, sizeof(buffer), 1, fw);
 	fflush(fw);
 	return true;
@@ -114,7 +112,7 @@ int extractPath(char path[]) {
 	strcpy(pathCopy, path);
 	inode tmp = { 0 };
 	FileEnt fileEnt[FILEENT_PER_BLOCK] = { 0 };
-
+	int address=0;
 	if (path[0] = '/') {
 		fseek(fr, Root_Dir_Addr, SEEK_SET);
 		fread(&tmp, sizeof(inode), 1, fr);
@@ -138,20 +136,11 @@ int extractPath(char path[]) {
 		for (int i = 0; i < FILEENT_PER_BLOCK; i++) {
 			if (token == ".")
 				break;
-			else if (token == "..") {
+			else if (token == fileEnt[i].dir.name) {
 				if (Cur_Dir_Addr == Root_Dir_Addr)
 					break;
-				else {
-					fseek(fr, Cur_Dir_Addr, SEEK_SET);
-					fread(&tmp, sizeof(inode), 1, fr);
-					fflush(fr);
-					fseek(fr, tmp.dirBlock[0], SEEK_SET);
-					fread(&fileEnt, sizeof(fileEnt), 1, fr);
-					fflush(fr);
-				}
-			}
-			else if (token == fileEnt[i].dir.name) {
 				if (((tmp.mode >> 9) & 1) == 1) {
+					address = fileEnt[1].dir.iaddr;
 					fseek(fr, fileEnt[i].dir.iaddr, SEEK_SET);
 					fread(&tmp, sizeof(inode), 1, fr);
 					fflush(fr);
@@ -160,14 +149,16 @@ int extractPath(char path[]) {
 					fflush(fr);
 				}
 				else {
-					return fileEnt[i].dir.iaddr;
+					address = fileEnt[i].dir.iaddr;
 				}
+			}
+			else {
+				return -1;
 			}
 		}
 		token = strtok(nullptr, "/");
 	}
-	cout << "Can't  find such a file.";
-	return -1;
+	return address;
 }
 
 

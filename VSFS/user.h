@@ -27,7 +27,7 @@ void inputPassword(char passwd[]);
 void gotoxy(HANDLE hOut, int x, int y);							
 bool check(char username[], char passwd[]);						
 void gotoRoot();																					
-bool create(int parinoAddr, char name[], char buf[]);
+bool create(char name[], char buf[]);
 
 void help();													
 
