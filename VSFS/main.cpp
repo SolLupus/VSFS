@@ -1,16 +1,19 @@
 #include "fs.h"
-#include<stdio.h>
+#include <stdio.h>
 #include <iostream>
+#include "user.h"
 #include "mkfs.cpp"
+#include <stdio.h>
+#include <pthread.h>
 using namespace std;
 
-//全局变量定义
-const int Superblock_StartAddr = SUPERBLOCK_START;																	
-const int InodeBitmap_StartAddr = INODE_BITMAP_START * BLOCK_SIZE;													
-const int BlockBitmap_StartAddr = DATA_BITMAP_START * BLOCK_SIZE;							
-const int Inode_StartAddr = INODE_TABLE_START * BLOCK_SIZE;								
-const int Block_StartAddr = Inode_StartAddr + IBLOCK_NUM * BLOCK_SIZE;
-const int File_Max_Size = MAX_FILE_SIZE;
+//global defination
+extern const int Superblock_StartAddr = SUPERBLOCK_START;																	
+extern const int InodeBitmap_StartAddr = INODE_BITMAP_START * BLOCK_SIZE;													
+extern const int BlockBitmap_StartAddr = DATA_BITMAP_START * BLOCK_SIZE;							
+extern const int Inode_StartAddr = INODE_TABLE_START * BLOCK_SIZE;								
+extern const int Block_StartAddr = Inode_StartAddr + IBLOCK_NUM * BLOCK_SIZE;
+extern const int File_Max_Size = MAX_FILE_SIZE;
 
 FILE* fw;									
 FILE* fr;									

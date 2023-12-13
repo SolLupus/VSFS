@@ -4,10 +4,13 @@
 #include <iostream>
 #include <conio.h>
 #include "user.cpp"
+#include <stdio.h>
+#include <pthread.h>
 
 using namespace std;
 
-void InitSystem() {
+//InitSystem finish
+static void InitSystem() {
 	//Virtual Disk does not exist
 	if ((fr = fopen(FILESYSNAME, "rb")) == NULL) {
 
@@ -29,9 +32,6 @@ void InitSystem() {
 		memset(Cur_Host_Name, 0, sizeof(Cur_Host_Name));
 		DWORD k = 100;
 		GetComputerName((LPTSTR)Cur_Host_Name, &k);
-
-		Root_Dir_Addr = Inode_StartAddr;
-		Cur_Dir_Addr = Root_Dir_Addr;
 		strcpy_s(Cur_Dir_Name, "/");
 
 		cout << "-----------------------------------------" << endl;
@@ -71,7 +71,7 @@ void InitSystem() {
 		memset(Cur_Host_Name, 0, sizeof(Cur_Host_Name));
 		DWORD k = 100;
 		GetComputerName((LPTSTR)Cur_Host_Name, &k);
-		Root_Dir_Addr = Inode_StartAddr;
+		Root_Dir_Addr = Inode_StartAddr+INODE_SIZE;
 		Cur_Dir_Addr = Root_Dir_Addr;
 		strcpy_s(Cur_Dir_Name, "/");
 
@@ -82,21 +82,25 @@ void InitSystem() {
 	}
 }
 
-bool Install() {
+//Install finish
+static bool Install() {
 	fseek(fr, Superblock_StartAddr, SEEK_SET);
 	fread(superblock, sizeof(SuperBlock), 1, fr);
-
+	fflush(fr);
+	imap = new uint8_t[BLOCK_SIZE];
 	fseek(fr, InodeBitmap_StartAddr, SEEK_SET);
-	fread(imap, sizeof(imap), 1, fr);
+	fread(imap, BLOCK_SIZE, 1, fr);
 
+	bmap = new uint8_t[BLOCK_SIZE];
 	fseek(fr, BlockBitmap_StartAddr, SEEK_SET);
-	fread(bmap, sizeof(bmap), 1, fr);
+	fread(bmap, BLOCK_SIZE, 1, fr);
+	fflush(fr);
 	return true;
 }
 
 
-
-bool Format() {
+//Format finish
+static bool Format() {
 
 	//Super BLock init
 	superblock->magic = MAGIC;
@@ -110,18 +114,18 @@ bool Format() {
 	superblock->imapStart = InodeBitmap_StartAddr;
 	superblock->bmapStart = BlockBitmap_StartAddr;
 	fseek(fw, Superblock_StartAddr, SEEK_SET);
-	fwrite(superblock, sizeof(superblock), 1, fw);
+	fwrite(superblock, sizeof(SuperBlock), 1, fw);
 
 	//write Block_Bitmap to Virtual disk
-	memset(bmap, 0, superblock->bmapSize);
+	bmap = (uint8_t*)malloc(superblock->bmapSize);
 	fseek(fw, BlockBitmap_StartAddr, SEEK_SET);
-	fwrite(bmap, sizeof(bmap), 1, fw);
+	fwrite(bmap, BLOCK_SIZE, 1, fw);
 
 
 	//write Inode_Bitmap to Virtual Disk
-	memset(imap, 0, superblock->imapSize);
+	imap = (uint8_t*)malloc(superblock->imapSize);
 	fseek(fw, InodeBitmap_StartAddr, SEEK_SET);
-	fwrite(imap, sizeof(imap), 1, fw);
+	fwrite(imap, BLOCK_SIZE, 1, fw);
 
 	fflush(fw);
 
@@ -131,7 +135,8 @@ bool Format() {
 
 	int inoAddr = InodeAlloc();
 	int blockAddr = BlockAlloc();
-
+	Root_Dir_Addr = inoAddr;
+	Cur_Dir_Addr = Root_Dir_Addr;
 	FileEnt fileEnt[FILEENT_PER_BLOCK] = { 0 };
 	Dirent dirent = { 0 };
 	strcpy_s(dirent.name, "/");
@@ -147,42 +152,40 @@ bool Format() {
 	cur.fileSize = 0;
 	strcpy_s(cur.uname, Cur_User_Name);
 	strcpy_s(cur.gname, Cur_Group_Name);
-	cur.refCnt = 0;
 	cur.dirBlock[0] = blockAddr;
 	for (int i = 1; i < IPB; i++) {
 		cur.dirBlock[i] = -1;
 	}
 	cur.IdirBlock = -1;
 	cur.mode = MODE_DIR | DIR_DEF_PERMISSION;
-	
+	initLock(cur);
 	fseek(fw, inoAddr, SEEK_SET);
 	fwrite(&cur, INODE_SIZE, 1, fw);
 	fflush(fw);
+	return true;
 }
 
-void Ready()	//登录系统前的准备工作,变量初始化+注册+安装
+//didn't use it
+static void Ready()	
 {
-	//初始化变量
 	nextUID = 0;
 	nextGID = 0;
 	isLogin = false;
 	strcpy_s(Cur_User_Name, "root");
 	strcpy_s(Cur_Group_Name, "root");
 
-	//获取主机名
 	memset(Cur_Host_Name, 0, sizeof(Cur_Host_Name));
 	DWORD k = 100;
 	GetComputerName((LPWSTR)Cur_Host_Name, &k);
 
-	//根目录inode地址 ，当前目录地址和名字
-	Root_Dir_Addr = Inode_StartAddr;	//第一个inode地址
+	Root_Dir_Addr = Inode_StartAddr;	
 	Cur_Dir_Addr = Root_Dir_Addr;
 	strcpy_s(Cur_Dir_Name, "/");
 
 
 	char c;
 	cout << "Do you want to format? [y/n] ";
-	while (c = getch()) {
+	while (c = getchar()) {
 		fflush(stdin);
 		if (c == 'y') {
 			printf("\n");

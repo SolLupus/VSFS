@@ -1,6 +1,7 @@
 #include "fs.h"
 #include "bitmap.h"
 #include <iostream>
+#include <pthread.h>
 using namespace std;
 
 
@@ -42,7 +43,7 @@ int InodeAlloc()
 	}
 	else {
 		fseek(fw, InodeBitmap_StartAddr, SEEK_SET);
-		fwrite(imap, sizeof(imap), 1, fw);
+		fwrite(imap, sizeof(BLOCK_SIZE), 1, fw);
 		fflush(fw);
 		return Inode_StartAddr + position * INODE_SIZE;
 	}
@@ -59,12 +60,12 @@ bool InodeFree(int address)
 	unsigned short inum = (address - Inode_StartAddr) / INODE_SIZE;
 	free_inode(superblock, imap, inum);
 	fseek(fw, InodeBitmap_StartAddr, SEEK_SET);
-	fwrite(imap, sizeof(imap), 1, fw);
+	fwrite(imap, sizeof(BLOCK_SIZE), 1, fw);
 
 	//claer inode
 	inode tmp = { 0 };
 	fseek(fw, address, SEEK_SET);
-	fwrite(&tmp, sizeof(tmp), 1, fw);
+	fwrite(&tmp, INODE_SIZE, 1, fw);
 
 	fflush(fw);
 
@@ -81,7 +82,7 @@ int BlockAlloc() {
 	}
 	else {
 		fseek(fw, BlockBitmap_StartAddr, SEEK_SET);
-		fwrite(bmap, sizeof(bmap), 1, fw);
+		fwrite(bmap, sizeof(BLOCK_SIZE), 1, fw);
 		fflush(fw);
 		return Block_StartAddr + BLOCK_SIZE * position;
 	}
@@ -96,7 +97,7 @@ bool BlockFree(int bnum) {
 	}
 	free_block(superblock, bmap, bnum);
 	fseek(fw, BlockBitmap_StartAddr, SEEK_SET);
-	fwrite(bmap, sizeof(bmap), 1, fw);
+	fwrite(bmap, sizeof(BLOCK_SIZE), 1, fw);
 
 	char buffer[BLOCK_SIZE] = { 0 };
 	fseek(fw, Block_StartAddr + bnum * BLOCK_SIZE, SEEK_SET);
@@ -105,15 +106,38 @@ bool BlockFree(int bnum) {
 	return true;
 }
 
+char* substring(char dir[],char name[]) {
+	const char* found = strstr(dir, name);
+
+	if (found != nullptr) {
+		size_t position = found - dir;  
+		char* result = new char[position + 1];  
+		strncpy(result, dir, position);  
+		result[position] = '\0';  
+		if (strlen(result) != 1 && result[position - 1] == '/') {
+			result[position - 1] = '\0';
+		}
+		return result;
+	}
+	else {
+		return "";
+	}
+
+	return "";
+}
 
 //parse path to inodeaddress
+//have some trouble in parse path like ../
 int extractPath(char path[]) {
-	char* pathCopy = new char[strlen(path) + 1];
-	strcpy(pathCopy, path);
+	char pathCopy[MAX_NAME_SIZE];
+	strcpy_s(pathCopy, path);
 	inode tmp = { 0 };
 	FileEnt fileEnt[FILEENT_PER_BLOCK] = { 0 };
 	int address=0;
 	if (path[0] = '/') {
+		if (strlen(path) == 1) {
+			return Root_Dir_Addr;
+		}
 		fseek(fr, Root_Dir_Addr, SEEK_SET);
 		fread(&tmp, sizeof(inode), 1, fr);
 		fflush(fr);
@@ -121,8 +145,10 @@ int extractPath(char path[]) {
 		fread(&fileEnt, sizeof(fileEnt), 1, fr);
 		fflush(fr);
 	}
+	else if (strcmp(path, "") == 0) {
+		return Cur_Dir_Addr;
+	}
 	else {
-
 		fseek(fr, Cur_Dir_Addr, SEEK_SET);
 		fread(&tmp, sizeof(inode), 1, fr);
 		fflush(fr);
@@ -130,17 +156,15 @@ int extractPath(char path[]) {
 		fread(&fileEnt, sizeof(fileEnt), 1, fr);
 		fflush(fr);
 	}
-
 	char* token = strtok(pathCopy, "/");
 	while (token != nullptr) {
 		for (int i = 0; i < FILEENT_PER_BLOCK; i++) {
 			if (token == ".")
 				break;
-			else if (token == fileEnt[i].dir.name) {
-				if (Cur_Dir_Addr == Root_Dir_Addr)
-					break;
+			else if (strcmp(token,fileEnt[i].dir.name)==0) {
 				if (((tmp.mode >> 9) & 1) == 1) {
-					address = fileEnt[1].dir.iaddr;
+					address = fileEnt[i].dir.iaddr;
+
 					fseek(fr, fileEnt[i].dir.iaddr, SEEK_SET);
 					fread(&tmp, sizeof(inode), 1, fr);
 					fflush(fr);
@@ -152,33 +176,33 @@ int extractPath(char path[]) {
 					address = fileEnt[i].dir.iaddr;
 				}
 			}
-			else {
-				return -1;
-			}
 		}
 		token = strtok(nullptr, "/");
 	}
-	return address;
+	if (address !=0)
+		return address;
+	else
+		return -1;
 }
 
 
 
 char* extractLastPath(char path[]) {
-	char* pathCopy = new char[strlen(path) + 1];
-	std::strcpy(pathCopy, path);
+	char pathCopy[MAX_NAME_SIZE];
+	strcpy_s(pathCopy, path);
 
-	// 使用 strtok 分割路径字符串
-	char* token = std::strtok(pathCopy, "/");
+
+	char* token =strtok(pathCopy, "/");
 	char* lastPathComponent = nullptr;
 
 	while (token != nullptr) {
 		lastPathComponent = token;
-		token = std::strtok(nullptr, "/");
+		token = strtok(nullptr, "/");
 	}
 
 	if (lastPathComponent != nullptr) {
 		return lastPathComponent;
-
-		delete[] pathCopy;
 	}
+
+	return "";
 }

@@ -1,9 +1,6 @@
 #ifndef USER_H
 #define USER_H
-#include<windows.h>
-#include "type.h"
-#include <iostream>
-using namespace std;
+#include <windows.h>
 
 bool login(char[]);											
 void logout();												
@@ -24,7 +21,7 @@ void cmd(char cmdline[]);
 
 void inputUsername(char username[]);							
 void inputPassword(char passwd[]);								
-void gotoxy(HANDLE hOut, int x, int y);							
+void Gotoxy(HANDLE hOut, int x, int y);							
 bool check(char username[], char passwd[]);						
 void gotoRoot();																					
 bool create(char name[], char buf[]);
@@ -53,10 +50,6 @@ void Exit_help();
 void Cat_help();
 void Touch_help();
 void Rm_help();
-void Vi_help();
-
-void Super_help();
-void Inode_help();
-void Block_help();
+void Vim_help();
 
 #endif // !USER_H

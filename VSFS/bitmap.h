@@ -15,12 +15,12 @@
 extern uint8_t* imap;		//bitmap of inode
 extern uint8_t* bmap;		//bitmap of block
 
-int allocate_block(struct SuperBlock* sb, uint8_t* bmap);
-void free_block(struct SuperBlock* sb, uint8_t* bmap, uint blockIndex);
+int allocate_block(SuperBlock* sb, uint8_t* bmap);
+void free_block(SuperBlock* sb, uint8_t* bmap, uint blockIndex);
 void print_block_bitmap(uint8_t* bmap, uint bmapSize);
 
-int allocate_inode(struct SuperBlock* sb, uint8_t* imap);
-void free_inode(struct SuperBlock* sb, uint8_t* imap, uint InodeIndex);
+int allocate_inode(SuperBlock* sb, uint8_t* imap);
+void free_inode(SuperBlock* sb, uint8_t* imap, uint InodeIndex);
 void print_inode_bitmap(uint8_t* imap, uint imapSize);
 
 

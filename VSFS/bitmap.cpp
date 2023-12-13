@@ -1,5 +1,5 @@
 #include "bitmap.h"
-
+#include <stdio.h>
 
 // block bitmap operation
 //uint8_t *bmap = (uint8_t *)malloc(sb.bmapSize);
@@ -38,7 +38,7 @@ void print_block_bitmap(uint8_t* bmap, uint bmapSize)
 
 //Inode bitmap operation
 
-int allocate_inode(struct SuperBlock* sb, uint8_t* imap)
+int allocate_inode(SuperBlock* sb, uint8_t* imap)
 {
     for (uint i = 0; i < sb->nInodes; ++i)
     {
@@ -52,7 +52,7 @@ int allocate_inode(struct SuperBlock* sb, uint8_t* imap)
     return -1;
 }
 
-void free_inode(struct SuperBlock* sb, uint8_t* imap, uint InodeIndex)
+void free_inode(SuperBlock* sb, uint8_t* imap, uint InodeIndex)
 {
     if (InodeIndex < sb->nInodes)
     {

@@ -7,7 +7,6 @@
 #include <cstdint>
 #include <pthread.h>
 
-
 #define MAGIC 0x10203040
 #define FILESYSNAME "So1_VFSF.sys"
 #define SYSNAME "So1's VSVF"
@@ -75,7 +74,6 @@ struct inode{
 	uint mode;			//Privilege For File r-read w-write x-exec
 	uint inum;			//inode number 
 	uint fileSize;		//Size of File
-	uint refCnt;		//Reference to this file
 
 	char uname[20];		// user Name
 	char gname[20];		// group Name
@@ -136,8 +134,13 @@ bool BlockFree(int address);				//free block
 bool InodeFree(int address);				//free inode
 int extractPath(char path[]);				//path parser -> return target inodeaddress
 char* extractLastPath(char path[]);
-void initLock(struct inode node);
-void destroyLock(struct inode node);
-void initFileEntLock(struct FileEnt fileEnt);
-void destroyFileEntLock(struct FileEnt fileEnt);
-#endif
+void initLock(inode node);
+void destroyLock(inode node);
+void initFileEntLock(FileEnt fileEnt);
+void destroyFileEntLock(FileEnt fileEnt);
+char* substring(char dir[], char name[]);
+
+void Help_NotLogin();
+bool Install();
+bool Format();
+#endif FS_H
