@@ -191,8 +191,8 @@ static bool useradd(char username[])
 		}
 	}
 	fflush(fr);
-	
-	if (strstr(passwd_buf, username)!= nullptr) {
+
+	if (strstr(passwd_buf, username) != nullptr) {
 		cout << "The user has already existed." << endl;
 
 		strcpy_s(Cur_User_Name, bak_Cur_User_Name);
@@ -201,9 +201,9 @@ static bool useradd(char username[])
 		strcpy_s(Cur_Dir_Name, bak_Cur_Dir_Name);
 		return false;
 	}
-	
+
 	pthread_rwlock_wrlock(&passwd_Inode.lock);
-	sprintf(passwd_buf+strlen(passwd_buf), "%s:x:%d:%d\n", username, nextUID++, 1);
+	sprintf(passwd_buf + strlen(passwd_buf), "%s:x:%d:%d\n", username, nextUID++, 1);
 	passwd_Inode.fileSize = strlen(passwd_buf);
 	fseek(fw, passwd_Inode_Addr, SEEK_SET);
 	fwrite(&passwd_Inode, INODE_SIZE, 1, fw);
@@ -211,7 +211,7 @@ static bool useradd(char username[])
 	pthread_rwlock_unlock(&passwd_Inode.lock);
 
 	pthread_rwlock_wrlock(&shadow_Inode.lock);
-	sprintf(shadow_buf+strlen(shadow_buf), "%s:%s\n", username, passwd);
+	sprintf(shadow_buf + strlen(shadow_buf), "%s:%s\n", username, passwd);
 	shadow_Inode.fileSize = strlen(shadow_buf);
 	fseek(fw, shadow_Inode_Addr, SEEK_SET);
 	fwrite(&shadow_Inode, INODE_SIZE, 1, fw);
@@ -219,7 +219,7 @@ static bool useradd(char username[])
 	pthread_rwlock_unlock(&shadow_Inode.lock);
 
 	pthread_rwlock_wrlock(&group_Inode.lock);
-	if(group_buf[strlen(group_buf)-2] == ':')
+	if (group_buf[strlen(group_buf) - 2] == ':')
 		sprintf(group_buf + strlen(group_buf) - 1, "%s\n", username);
 	else
 		sprintf(group_buf + strlen(group_buf) - 1, ",%s\n", username);
@@ -342,7 +342,7 @@ static bool userdel(char username[])
 	pthread_rwlock_wrlock(&passwd_Inode.lock);
 	char* p1 = strstr(passwd_buf, username);
 	*p1 = '\0';
-	while ((*p1) != '\n')	
+	while ((*p1) != '\n')
 		p1++;
 	p1++;
 	strcat_s(passwd_buf, p1);
@@ -355,7 +355,7 @@ static bool userdel(char username[])
 	pthread_rwlock_wrlock(&shadow_Inode.lock);
 	char* p2 = strstr(shadow_buf, username);
 	*p2 = '\0';
-	while ((*p2) != '\n')	
+	while ((*p2) != '\n')
 		p2++;
 	p2++;
 	shadow_Inode.fileSize = strlen(shadow_buf);
@@ -367,7 +367,7 @@ static bool userdel(char username[])
 	pthread_rwlock_wrlock(&group_Inode.lock);
 	char* p3 = strstr(group_buf, username);
 	*p3 = '\0';
-	while ((*p3) != '\n' && (*p3) != ',')	
+	while ((*p3) != '\n' && (*p3) != ',')
 		p3++;
 	if ((*p3) == ',')
 		p3++;
@@ -380,10 +380,10 @@ static bool userdel(char username[])
 
 	for (int i = 0; i < FILEENT_PER_BLOCK; i++) {
 		if (strcmp(fileEnt[i].dir.name, "passwd") == 0) {
-			strcpy_s(fileEnt[i].buffer,passwd_buf);
+			strcpy_s(fileEnt[i].buffer, passwd_buf);
 		}
 		if (strcmp(fileEnt[i].dir.name, "shadow") == 0) {
-			strcpy_s(fileEnt[i].buffer,shadow_buf);
+			strcpy_s(fileEnt[i].buffer, shadow_buf);
 		}
 		if (strcmp(fileEnt[i].dir.name, "group") == 0) {
 			strcpy_s(fileEnt[i].buffer, group_buf);
@@ -393,68 +393,86 @@ static bool userdel(char username[])
 	fwrite(fileEnt, sizeof(fileEnt), 1, fw);
 	fflush(fw);
 
-	
+
 	char* tmp = strcat("/home/", username);
-	if (strcmp(Cur_Dir_Name, tmp)==0) {
+	if (strcmp(Cur_Dir_Name, tmp) == 0) {
 		cd("/");
 		rm(tmp);
-	}else
+	}
+	else
 		rm(tmp);
 
 	cout << "User has deleted." << endl;
 	return true;
 }
 
-//didn't test yet
+//have bug in parse .. ../ below function
+//didn't support relative path
+//chmod finish
 static void chmod(char name[], int pmode)
 {
 	if (strlen(name) > MAX_FILE_SIZE) {
-		cout << "Name is too long"<<endl;
+		cout << "Name is too long" << endl;
 		return;
 	}
-	if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0) {
-		cout << "Operation error." << endl;
-		return;
-	}
+	char tmpName[1024], fileName[1024];
 	int parinoaddr;
-	char tmpName[30], FileName[30];
-	if (strlen(name) > FILENAME_MAX) {
-		cout << "File name too long." << endl;
-		return;
+	int address = 0;
+	inode fileinode = { 0 };
+	if (strcmp(name, "") == 0||strcmp(name,".")==0) {
+		strcpy(fileName, Cur_Dir_Name);
+		parinoaddr = Cur_Dir_Addr;
 	}
-	if (strstr(name, "/") == nullptr) {
-		strcpy_s(FileName, extractLastPath(name));
+	else if (strcmp(name, "/") == 0) {
+		strcpy(fileName, Cur_Dir_Name);
+		parinoaddr = Root_Dir_Addr;
+	}
+	else if (strstr(name, "/") == nullptr) {
+		strcpy_s(fileName, extractLastPath(name));
 		parinoaddr = Cur_Dir_Addr;
 	}
 	else {
 		strcpy_s(tmpName, name);
-		strcpy_s(FileName, extractLastPath(name));
-		strcpy_s(tmpName, substring(tmpName, FileName));
+		strcpy_s(fileName, extractLastPath(name));
 		parinoaddr = extractPath(tmpName);
 	}
 	if (parinoaddr == -1) {
-		cout << "Can't touch file at Non-existent path." << endl;
+		cout << "No such file or dictionary." << endl;
 		return;
 	}
 	inode cur = { 0 };
 	fseek(fr, parinoaddr, SEEK_SET);
 	fread(&cur, sizeof(inode), 1, fr);
 	fflush(fr);
-	
-	if (strcmp(cur.uname,Cur_User_Name)==0) {
-		pthread_rwlock_wrlock(&cur.lock);
-		cur.mode = (cur.mode >> 9 << 9) | pmode;
-		fseek(fw, parinoaddr, SEEK_SET);
-		fwrite(&cur, INODE_SIZE, 1, fw);
-		pthread_rwlock_unlock(&cur.lock);
+	FileEnt fileEnt[FILEENT_PER_BLOCK] = { 0 };
+	fseek(fr, cur.dirBlock[0], SEEK_SET);
+	fread(fileEnt, sizeof(fileEnt), 1, fr);
+	fflush(fr);
+	for (int i = 0; i < FILEENT_PER_BLOCK; i++) {
+		if (strcmp(fileEnt[i].dir.name, fileName) == 0) {
+			address = fileEnt[i].dir.iaddr;
+			fseek(fr, fileEnt[i].dir.iaddr, SEEK_SET);
+			fread(&fileinode, sizeof(inode), 1, fr);
+			fflush(fr);
+			break;
+		}
+	}
+	if (strcmp(fileinode.uname, Cur_User_Name) == 0) {
+		pthread_rwlock_wrlock(&fileinode.lock);
+		fileinode.mode = (fileinode.mode >> 9 << 9) | pmode;
+		fseek(fw, address, SEEK_SET);
+		fwrite(&fileinode, INODE_SIZE, 1, fw);
+		fflush(fw);
+		pthread_rwlock_unlock(&fileinode.lock);
 		return;
 	}
-	else if (strcmp(cur.gname, Cur_Group_Name)==0) {
-		pthread_rwlock_wrlock(&cur.lock);
-		cur.mode = (cur.mode >> 9 << 9) | pmode;
-		fseek(fw, parinoaddr, SEEK_SET);
-		fwrite(&cur, INODE_SIZE, 1, fw);
-		pthread_rwlock_unlock(&cur.lock);
+	else if (strcmp(fileinode.gname, Cur_Group_Name) == 0) {
+		pthread_rwlock_wrlock(&fileinode.lock);
+		fileinode.mode = (fileinode.mode >> 9 << 9) | pmode;
+		fseek(fw, address, SEEK_SET);
+		fwrite(&fileinode, INODE_SIZE, 1, fw);
+		fflush(fw);
+		pthread_rwlock_unlock(&fileinode.lock);
 		return;
 	}
 	else {
@@ -463,30 +481,37 @@ static void chmod(char name[], int pmode)
 	}
 }
 
-// have bug in parse .. ../
+//touch finish
 static void touch(char name[]) //ok
 {
 	int parinoAddr;
-	char tmpName[30], FileName[30];
+	char tmpName[1024], FileName[1024];
 	if (strlen(name) > FILENAME_MAX) {
 		cout << "File name too long." << endl;
 		return;
 	}
-	if (strstr(name, "/") == nullptr) {
+	if (strcmp(name, "") == 0 || strcmp(name, ".") == 0) {
+		strcpy(FileName, Cur_Dir_Name);
+		parinoAddr = Cur_Dir_Addr;
+	}
+	else if (strcmp(name, "/") == 0) {
+		strcpy(FileName, Cur_Dir_Name);
+		parinoAddr = Root_Dir_Addr;
+	}
+	else if (strstr(name, "/") == nullptr) {
 		strcpy_s(FileName, extractLastPath(name));
 		parinoAddr = Cur_Dir_Addr;
 	}
 	else {
 		strcpy_s(tmpName, name);
 		strcpy_s(FileName, extractLastPath(name));
-		strcpy_s(tmpName, substring(tmpName, FileName));
 		parinoAddr = extractPath(tmpName);
 	}
 	if (parinoAddr == -1) {
 		cout << "Can't touch file at Non-existent path." << endl;
-		return ;
+		return;
 	}
-	
+
 	int newInodeAddress = InodeAlloc();
 	if (newInodeAddress == -1) {
 		cout << "No empty space." << endl;
@@ -501,7 +526,7 @@ static void touch(char name[]) //ok
 		fseek(fr, cur.dirBlock[0], SEEK_SET);
 		fread(fileEnt, sizeof(fileEnt), 1, fr);
 		fflush(fr);
-		int cnt=1;
+		int cnt = 1;
 		for (int i = 0; i < FILEENT_PER_BLOCK; i++) {
 			if (fileEnt[i].dir.iaddr == 0) {
 				fileEnt[i].dir.iaddr = newInodeAddress;
@@ -542,23 +567,30 @@ static void touch(char name[]) //ok
 	}
 }
 
-// have bug in parse .. ../
+//mkdir finish
 static bool mkdir(char name[])  //ok
 {
-	char tmpName[30], dirName[30];
+	char tmpName[1024], dirName[1024];
 	int parinoAddr;
 	if (strlen(name) > MAX_FILE_NAME) {
 		cout << "The directory name is too long." << endl;
 		return false;
 	}
-	if (strstr(name, "/") == nullptr) {
+	if (strcmp(name, "") == 0 || strcmp(name, ".") == 0) {
+		strcpy(dirName, Cur_Dir_Name);
+		parinoAddr = Cur_Dir_Addr;
+	}
+	else if (strcmp(name, "/") == 0) {
+		strcpy(dirName, Cur_Dir_Name);
+		parinoAddr = Root_Dir_Addr;
+	}
+	else if (strstr(name, "/") == nullptr) {
 		strcpy_s(dirName, extractLastPath(name));
 		parinoAddr = Cur_Dir_Addr;
 	}
 	else {
 		strcpy_s(tmpName, name);
 		strcpy_s(dirName, extractLastPath(name));
-		strcpy_s(tmpName, substring(tmpName, dirName));
 		parinoAddr = extractPath(tmpName);
 	}
 	if (parinoAddr == -1) {
@@ -621,8 +653,8 @@ static bool mkdir(char name[])  //ok
 		}
 
 		//update current dictionary information
-		for(int i=0;i<FILEENT_PER_BLOCK;i++){
-			if (strcmp(curFileEnt[i].dir.name,"")==0) {
+		for (int i = 0; i < FILEENT_PER_BLOCK; i++) {
+			if (strcmp(curFileEnt[i].dir.name, "") == 0) {
 				curFileEnt[i].dir = dir;
 				strcpy_s(curFileEnt[i].buffer, "");
 				break;
@@ -655,51 +687,79 @@ static bool mkdir(char name[])  //ok
 
 }
 
-//have big bug lead to assert
+//rm finish
 static bool rm(char name[])
 {
-	char tmpName[30], dirName[30];
-	strcpy_s(tmpName, name);
-	strcpy_s(dirName, extractLastPath(name));
-	strcpy_s(tmpName, substring(tmpName, dirName));
-	int parinoaddr = extractPath(tmpName);
+	char tmpName[1024], fileName[1024];
+	int parinoaddr;
+	int address = 0;
+	if (strcmp(name, "") == 0 || strcmp(name, ".") == 0) {
+		strcpy_s(fileName, Cur_Dir_Name);
+		parinoaddr = Cur_Dir_Addr;
+	}
+	else if (strcmp(name, "/") == 0) {
+		strcpy_s(fileName, Cur_Dir_Name);
+		parinoaddr = Root_Dir_Addr;
+	}
+	else if (strstr(name, "/") == nullptr) {
+		strcpy_s(fileName, extractLastPath(name));
+		parinoaddr = Cur_Dir_Addr;
+	}
+	else {
+		strcpy_s(tmpName, name);
+		strcpy_s(fileName, extractLastPath(name));
+		parinoaddr = extractPath(tmpName);
+	}
 	if (parinoaddr == -1) {
 		cout << "No such file or dictionary." << endl;
 		return false;
 	}
-	char* fileName = extractLastPath(name);
-	//get current inode
+	inode empty = { 0 };
+	FileEnt emptyfile = { 0 };
+	FileEnt tmp = { 0 };
+	inode fileinode = { 0 };
+	//get current dir inode
 	inode cur = { 0 };
 	fseek(fr, parinoaddr, SEEK_SET);
 	fread(&cur, sizeof(inode), 1, fr);
 	fflush(fr);
+	FileEnt fileEnt[FILEENT_PER_BLOCK] = { 0 };
+	fseek(fr, cur.dirBlock[0], SEEK_SET);
+	fread(fileEnt, sizeof(fileEnt), 1, fr);
+	fflush(fr);
 
+	//get fileinode
+	for (int i = 0; i < FILEENT_PER_BLOCK; i++) {
+		if (strcmp(fileEnt[i].dir.name, fileName) == 0) {
+			address = fileEnt[i].dir.iaddr;
+			fseek(fr, fileEnt[i].dir.iaddr, SEEK_SET);
+			fread(&fileinode, sizeof(inode), 1, fr);
+			fflush(fr);
+			break;
+		}
+	}
 	int filemode;
-	if (strcmp(Cur_User_Name, cur.uname) == 0)
+	if (strcmp(Cur_User_Name, fileinode.uname) == 0)
 		filemode = 6;
-	else if (strcmp(Cur_Group_Name, cur.gname) == 0)
+	else if (strcmp(Cur_Group_Name, fileinode.gname) == 0)
 		filemode = 3;
 	else
 		filemode = 0;
 
-	if (((cur.mode >> filemode >> 1) & 1) == 0) {
+	if (((fileinode.mode >> filemode >> 1) & 1) == 0) {
 		cout << "Permission Denied" << endl;
 		return false;
 	}
 
-	if (((cur.mode >> 9) & 1) == 0) { //file
-		FileEnt fileEnt[FILEENT_PER_BLOCK] = { 0 };
-		fseek(fr, cur.dirBlock[0], SEEK_SET);
-		fread(fileEnt, sizeof(fileEnt), 1, fr);
-		fflush(fr);
+	if (((fileinode.mode >> 9) & 1) == 0) { //file
 		for (int i = 0; i < FILEENT_PER_BLOCK; i++) {
-			if (fileEnt[i].dir.name == fileName) {
-				fseek(fw, cur.dirBlock[0]+i*sizeof(FileEnt), SEEK_SET);
-				fwrite(0, sizeof(FileEnt), 1, fw);
-				fseek(fw, parinoaddr, SEEK_SET);
-				fwrite(0, INODE_SIZE, 1, fw);
+			if (strcmp(fileEnt[i].dir.name, fileName)==0) {
+				fseek(fw, cur.dirBlock[0] + i * sizeof(FileEnt), SEEK_SET);
+				fwrite(&emptyfile, sizeof(FileEnt), 1, fw);
+				fseek(fw, address, SEEK_SET);
+				fwrite(&empty, INODE_SIZE, 1, fw);
 				fflush(fw);
-				free_inode(superblock, imap, (parinoaddr - Inode_StartAddr) / INODE_SIZE);
+				free_inode(superblock, imap, (address - Inode_StartAddr) / INODE_SIZE);
 				break;
 			}
 		}
@@ -707,19 +767,25 @@ static bool rm(char name[])
 	}
 	else {						//dictionary
 		int start = cur.dirBlock[0];
+		int diraddress = 0;
 		FileEnt fileEnt[FILEENT_PER_BLOCK] = { 0 };
+		FileEnt emptydir[FILEENT_PER_BLOCK] = { 0 };
 		fseek(fr, start, SEEK_SET);
 		fread(fileEnt, sizeof(fileEnt), 1, fr);
 		fflush(fr);
 		for (int i = 0; i < FILEENT_PER_BLOCK; i++) {
-			if (fileEnt[i].dir.name != "..") {
+			if (strcmp(fileEnt[i].dir.name, fileName) == 0) {
+				diraddress = fileEnt[i].dir.iaddr;
 				fseek(fw, fileEnt[i].dir.iaddr, SEEK_SET);
-				fwrite(0, INODE_SIZE, 1, fw);
+				fwrite(&empty, INODE_SIZE, 1, fw);
+				fileEnt[i] = {0};
 				free_inode(superblock, imap, (fileEnt[i].dir.iaddr - Inode_StartAddr) / INODE_SIZE);
 			}
 		}
+		fseek(fw, diraddress, SEEK_SET);
+		fwrite(&emptydir, sizeof(emptydir), 1, fw);
 		fseek(fw, start, SEEK_SET);
-		fwrite(0, sizeof(fileEnt), 1, fw);
+		fwrite(&fileEnt, sizeof(fileEnt), 1, fw);
 		fflush(fw);
 		free_block(superblock, bmap, (start - Block_StartAddr) / BLOCK_SIZE);
 		return true;
@@ -727,18 +793,20 @@ static bool rm(char name[])
 	return false;
 }
 
-// have bug in parse .. ../
+//ls finish
 static void ls(char name[])
 {
 	int parinoaddr;
-	char tmpName[30], dirName[30];
-	if (strcmp(name, "") == 0) {
+	char tmpName[1024], dirName[1024];
+	if (strcmp(name, "") == 0 || strcmp(name, ".") == 0) {
+		strcpy_s(dirName, Cur_Dir_Name);
 		parinoaddr = Cur_Dir_Addr;
 	}
 	else if (strcmp(name, "/") == 0) {
+		strcpy_s(dirName, Cur_Dir_Name);
 		parinoaddr = Root_Dir_Addr;
 	}
-	else if(strstr(name, "/")== nullptr) {
+	else if (strstr(name, "/") == nullptr) {
 		strcpy_s(dirName, extractLastPath(name));
 		parinoaddr = Cur_Dir_Addr;
 	}
@@ -782,7 +850,7 @@ static void ls(char name[])
 		fseek(fr, dir.iaddr, SEEK_SET);
 		fread(&tmp, sizeof(inode), 1, fr);
 		fflush(fr);
-		if (strcmp(dir.name,"")==0)
+		if (strcmp(dir.name, "") == 0)
 			continue;
 		if (((tmp.mode >> 9) & 1) == 1) {
 			printf("d");
@@ -792,7 +860,7 @@ static void ls(char name[])
 		}
 
 		//for time loaded
-		tm* ptr;	
+		tm* ptr;
 		ptr = gmtime(&tmp.mtime);
 
 		//file privilege information
@@ -802,16 +870,16 @@ static void ls(char name[])
 				if (t % 3 == 2)	printf("r");
 				if (t % 3 == 1)	printf("w");
 				if (t % 3 == 0)	printf("x");
-	}
+			}
 			else {
 				printf("-");
 			}
 			t--;
-}
+		}
 		printf(" ");
 
-		printf("%s ", tmp.uname);	
-		printf("%s\t", tmp.gname);	
+		printf("%s ", tmp.uname);
+		printf("%s\t", tmp.gname);
 		printf("%d B\t", tmp.fileSize);
 		printf("%d.%d.%d %02d:%02d:%02d  ", 1900 + ptr->tm_year, ptr->tm_mon + 1, ptr->tm_mday, (8 + ptr->tm_hour) % 24, ptr->tm_min, ptr->tm_sec);
 		if (i == 0)
@@ -822,18 +890,14 @@ static void ls(char name[])
 	}
 }
 
-// have bug in parse .. ../
+//cd finish
 static void cd(char name[]) //some little bug
 {
-	if (strlen(name) > MAX_FILE_NAME) {
-		cout << "The directory name is too long." << endl;
-		return;
-	}
-	if (strcmp(name, "")==0) {
+	if (strcmp(name, "") == 0) {
 		cout << "The argument can't be empty." << endl;
 		return;
 	}
-	if (strcmp(name, ".")==0) {
+	if (strcmp(name, ".") == 0) {
 		return;
 	}
 	if (strcmp(name, "/") == 0) {
@@ -844,11 +908,12 @@ static void cd(char name[]) //some little bug
 	if (strcmp(name, "~") == 0) {
 		strcpy(name, Cur_User_Dir_Name);
 	}
-	char tmpName[30], dirName[30];
+	char tmpName[1024], dirName[1024];
 	strcpy_s(tmpName, name);
 	strcpy_s(dirName, extractLastPath(name));
 	strcpy_s(tmpName, substring(tmpName, dirName));
 	int parinoaddr = extractPath(tmpName);
+
 	if (parinoaddr != -1) {
 		inode cur = { 0 };
 		FileEnt fileEnt[FILEENT_PER_BLOCK] = { 0 };
@@ -864,9 +929,9 @@ static void cd(char name[]) //some little bug
 		fflush(fr);
 		for (int i = 0; i < FILEENT_PER_BLOCK; i++) {
 			if (strcmp(dirName, fileEnt[i].dir.name) == 0) {
-				if(strcmp(tmpName,"/"))
-					strcpy_s(Cur_Dir_Name, strcat(tmpName,"/"));
-				else 
+				if (strcmp(tmpName, "/"))
+					strcpy_s(Cur_Dir_Name, strcat(tmpName, "/"));
+				else
 					strcpy_s(Cur_Dir_Name, tmpName);
 				strcat(Cur_Dir_Name, fileEnt[i].dir.name);
 				Cur_Dir_Addr = fileEnt[i].dir.iaddr;
@@ -880,28 +945,36 @@ static void cd(char name[]) //some little bug
 	}
 }
 
-//didn't test yet
+//vim finish
 static void vim(char name[], char buf[])
 {
-	if (strlen(name) >= MAX_NAME_SIZE) {
-		cout << "The filename is too long." << endl;
-		return;
-	}
-
-
 	memset(buf, 0, sizeof(buf));
 	int maxlen = 0;
 	int position = 0;
-	bool isExist=false;
+	bool isExist = false;
 	int fileInodeAddr;
 	char tmpName[30], FileName[30];
-	strcpy_s(tmpName, name);
-	strcpy_s(FileName, extractLastPath(name));
-	strcpy_s(tmpName, substring(tmpName, FileName));
-	int parinoAddr = extractPath(tmpName);
+	int parinoAddr;
+	if (strcmp(name, "") == 0) {
+		strcpy_s(FileName, Cur_Dir_Name);
+		parinoAddr = Cur_Dir_Addr;
+	}
+	else if (strcmp(name, "/") == 0) {
+		strcpy_s(FileName, Cur_Dir_Name);
+		parinoAddr = Root_Dir_Addr;
+	}
+	else if (strstr(name, "/") == nullptr) {
+		strcpy_s(FileName, extractLastPath(name));
+		parinoAddr = Cur_Dir_Addr;
+	}
+	else {
+		strcpy_s(tmpName, name);
+		strcpy_s(FileName, extractLastPath(name));
+		parinoAddr = extractPath(tmpName);
+	}
 	if (parinoAddr == -1) {
 		cout << "Can't do operation at Non-existent path." << endl;
-		return ;
+		return;
 	}
 	inode cur = { 0 };
 	inode fileinode = { 0 };
@@ -925,7 +998,7 @@ static void vim(char name[], char buf[])
 			fseek(fr, fileEnt[i].dir.iaddr, SEEK_SET);
 			fread(&fileinode, sizeof(inode), 1, fr);
 			fflush(fr);
-			if (((fileinode.mode >> 9) & 1) == 0) {	//是文件且重名，打开这个文件，并编辑	
+			if (((fileinode.mode >> 9) & 1) == 0) {	//find the file ,go into edit mode
 				pthread_rwlock_wrlock(&fileEnt[i].lock);
 				fileInodeAddr = fileEnt[i].dir.iaddr;
 				position = i;
@@ -937,21 +1010,19 @@ static void vim(char name[], char buf[])
 
 label:
 
-	//初始化vi
 	int cnt = 0;
-	system("cls");	//清屏
+	system("cls");
 
 	int winx, winy, curx, cury;
 
-	HANDLE handle_out;                              //定义一个句柄  
-	CONSOLE_SCREEN_BUFFER_INFO screen_info;         //定义窗口缓冲区信息结构体  
-	COORD pos = { 0, 0 };                             //定义一个坐标结构体
+	HANDLE handle_out;                        
+	CONSOLE_SCREEN_BUFFER_INFO screen_info;        
+	COORD pos = { 0, 0 };                         
 
-	if (isExist) {	//文件已存在，进入编辑模式，先输出之前的文件内容
+	if (isExist) {	//file exist got into edit mode
 
-		//权限判断。判断文件是否可读
+		//privilege check
 		if (((fileinode.mode >> filemode >> 2) & 1) == 0) {
-			//不可读
 			cout << "Permission denied." << endl;
 			return;
 		}
@@ -960,25 +1031,21 @@ label:
 		maxlen = strlen(fileEnt[position].buffer);
 	}
 
-	//获得输出之后的光标位置
-	handle_out = GetStdHandle(STD_OUTPUT_HANDLE);   //获得标准输出设备句柄  
-	GetConsoleScreenBufferInfo(handle_out, &screen_info);   //获取窗口信息  
+	handle_out = GetStdHandle(STD_OUTPUT_HANDLE);    
+	GetConsoleScreenBufferInfo(handle_out, &screen_info);   
 	winx = screen_info.srWindow.Right - screen_info.srWindow.Left + 1;
 	winy = screen_info.srWindow.Bottom - screen_info.srWindow.Top + 1;
 	curx = screen_info.dwCursorPosition.X;
 	cury = screen_info.dwCursorPosition.Y;
 
 
-	//进入vi
-	//先用vi读取文件内容
-
-	int mode = 0;	//vi模式，一开始是命令模式
+	int mode = 0;	
 	unsigned char c;
 	while (1) {
-		if (mode == 0) {	//命令行模式
-			c = getchar();
+		if (mode == 0) {	
+			c = _getch();
 
-			if (c == 'i' || c == 'a') {	//插入模式
+			if (c == 'i' || c == 'a') {	
 				if (c == 'a') {
 					curx++;
 					if (curx == winx) {
@@ -988,7 +1055,6 @@ label:
 				}
 
 				if (cury > winy - 2 || cury % (winy - 1) == winy - 2) {
-					//超过这一屏，向下翻页
 					if (cury % (winy - 1) == winy - 2)
 						printf("\n");
 					SetConsoleTextAttribute(handle_out, screen_info.wAttributes);
@@ -1001,9 +1067,8 @@ label:
 					Gotoxy(handle_out, 0, cury);
 				}
 				else {
-					//显示 "插入模式"
 					Gotoxy(handle_out, 0, winy - 1);
-					SetConsoleTextAttribute(handle_out, screen_info.wAttributes); // 恢复原来的属性
+					SetConsoleTextAttribute(handle_out, screen_info.wAttributes); 
 					int i;
 					for (i = 0; i < winx - 1; i++)
 						printf(" ");
@@ -1018,7 +1083,6 @@ label:
 
 			}
 			else if (c == ':') {
-				//system("color 09");//设置文本为蓝色
 				if (cury - winy + 2 > 0)
 					Gotoxy(handle_out, 0, cury + 1);
 				else
@@ -1028,7 +1092,7 @@ label:
 					pos.X = 0, pos.Y = cury + 1;
 				else
 					pos.X = 0, pos.Y = winy - 1;
-				SetConsoleTextAttribute(handle_out, screen_info.wAttributes); // 恢复原来的属性
+				SetConsoleTextAttribute(handle_out, screen_info.wAttributes); 
 				int i;
 				for (i = 0; i < winx - 1; i++)
 					printf(" ");
@@ -1037,20 +1101,15 @@ label:
 					Gotoxy(handle_out, 0, cury + 1);
 				else
 					Gotoxy(handle_out, 0, winy - 1);
-
-				WORD att = BACKGROUND_RED | BACKGROUND_BLUE | FOREGROUND_INTENSITY; // 文本属性
-				FillConsoleOutputAttribute(handle_out, att, winx, pos, NULL);	//控制台部分着色 
-				SetConsoleTextAttribute(handle_out, FOREGROUND_INTENSITY | BACKGROUND_RED | BACKGROUND_BLUE | FOREGROUND_GREEN);	//设置文本颜色
 				printf(":");
 
 				char pc;
-				int tcnt = 1;	//命令行模式输入的字符计数
-				while (c = getchar()) {
-					if (c == '\r') {	//回车
+				int tcnt = 1;	
+				while (c = _getch()) {
+					if (c == '\r') {
 						break;
 					}
-					else if (c == '\b') {	//退格，从命令条删除一个字符 
-						//SetConsoleTextAttribute(handle_out, screen_info.wAttributes); // 恢复原来的属性
+					else if (c == '\b') {
 						tcnt--;
 						if (tcnt == 0)
 							break;
@@ -1065,17 +1124,16 @@ label:
 				}
 				if (pc == 'q') {
 					buf[cnt] = '\0';
-					//buf[maxlen] = '\0'; 
-					SetConsoleTextAttribute(handle_out, screen_info.wAttributes); // 恢复原来的属性
+					SetConsoleTextAttribute(handle_out, screen_info.wAttributes); 
 					system("cls");
-					break;	//vi >>>>>>>>>>>>>> 退出出口
+					break;
 				}
 				else {
 					if (cury - winy + 2 > 0)
 						Gotoxy(handle_out, 0, cury + 1);
 					else
 						Gotoxy(handle_out, 0, winy - 1);
-					SetConsoleTextAttribute(handle_out, screen_info.wAttributes); // 恢复原来的属性
+					SetConsoleTextAttribute(handle_out, screen_info.wAttributes); 
 					int i;
 					for (i = 0; i < winx - 1; i++)
 						printf(" ");
@@ -1084,17 +1142,14 @@ label:
 						Gotoxy(handle_out, 0, cury + 1);
 					else
 						Gotoxy(handle_out, 0, winy - 1);
-					SetConsoleTextAttribute(handle_out, FOREGROUND_INTENSITY | BACKGROUND_RED | BACKGROUND_BLUE | FOREGROUND_GREEN);	//设置文本颜色
-					FillConsoleOutputAttribute(handle_out, att, winx, pos, NULL);	//控制台部分着色
 					printf("--  Command Error --");
-					//getchar();
-					SetConsoleTextAttribute(handle_out, screen_info.wAttributes); // 恢复原来的属性
+					SetConsoleTextAttribute(handle_out, screen_info.wAttributes); 
 					Gotoxy(handle_out, curx, cury);
 				}
 			}
-			else if (c == 27) {	//ESC，命令行模式，清状态条
+			else if (c == 27) {	//ESC,shift to command mode
 				Gotoxy(handle_out, 0, winy - 1);
-				SetConsoleTextAttribute(handle_out, screen_info.wAttributes); // 恢复原来的属性
+				SetConsoleTextAttribute(handle_out, screen_info.wAttributes);
 				int i;
 				for (i = 0; i < winx - 1; i++)
 					printf(" ");
@@ -1103,7 +1158,7 @@ label:
 			}
 
 		}
-		else if (mode == 1) {	//插入模式
+		else if (mode == 1) {
 
 			Gotoxy(handle_out, winx / 4 * 3, winy - 1);
 			int i = winx / 4 * 3;
@@ -1118,27 +1173,25 @@ label:
 			printf("[Row: %d, Column: %d]", curx == -1 ? 0 : curx, cury);
 			Gotoxy(handle_out, curx, cury);
 
-			c = getchar();
-			if (c == 27) {	// ESC，进入命令模式
+			c = _getch();
+			if (c == 27) {
 				mode = 0;
-				//清状态条
 				Gotoxy(handle_out, 0, winy - 1);
-				SetConsoleTextAttribute(handle_out, screen_info.wAttributes); // 恢复原来的属性
+				SetConsoleTextAttribute(handle_out, screen_info.wAttributes);
 				int i;
 				for (i = 0; i < winx - 1; i++)
 					printf(" ");
 				continue;
 			}
-			else if (c == '\b') {	//退格，删除一个字符
-				if (cnt == 0)	//已经退到最开始
+			else if (c == '\b') {
+				if (cnt == 0)
 					continue;
 				printf("\b");
 				printf(" ");
 				printf("\b");
 				curx--;
-				cnt--;	//删除字符
+				cnt--;
 				if (buf[cnt] == '\n') {
-					//要删除的这个字符是回车，光标回到上一行
 					if (cury != 0)
 						cury--;
 					int k;
@@ -1148,10 +1201,10 @@ label:
 					Gotoxy(handle_out, curx, cury);
 					printf(" ");
 					Gotoxy(handle_out, curx, cury);
-					if (cury - winy + 2 >= 0) {	//翻页时
+					if (cury - winy + 2 >= 0) {
 						Gotoxy(handle_out, curx, 0);
 						Gotoxy(handle_out, curx, cury + 1);
-						SetConsoleTextAttribute(handle_out, screen_info.wAttributes); // 恢复原来的属性
+						SetConsoleTextAttribute(handle_out, screen_info.wAttributes);
 						int i;
 						for (i = 0; i < winx - 1; i++)
 							printf(" ");
@@ -1166,14 +1219,13 @@ label:
 					buf[cnt] = ' ';
 				continue;
 			}
-			else if (c == 224) {	//判断是否是箭头
-				c = getchar();
-				if (c == 75) {	//左箭头
+			else if (c == 224) {
+				c = _getch();
+				if (c == 75) {
 					if (cnt != 0) {
 						cnt--;
 						curx--;
 						if (buf[cnt] == '\n') {
-							//上一个字符是回车
 							if (cury != 0)
 								cury--;
 							int k;
@@ -1184,7 +1236,7 @@ label:
 						Gotoxy(handle_out, curx, cury);
 					}
 				}
-				else if (c == 77) {	//右箭头
+				else if (c == 77) {	
 					cnt++;
 					if (cnt > maxlen)
 						maxlen = cnt;
@@ -1194,10 +1246,9 @@ label:
 						cury++;
 
 						if (cury > winy - 2 || cury % (winy - 1) == winy - 2) {
-							//超过这一屏，向下翻页
 							if (cury % (winy - 1) == winy - 2)
 								printf("\n");
-							SetConsoleTextAttribute(handle_out, screen_info.wAttributes); // 恢复原来的属性
+							SetConsoleTextAttribute(handle_out, screen_info.wAttributes);
 							int i;
 							for (i = 0; i < winx - 1; i++)
 								printf(" ");
@@ -1211,16 +1262,15 @@ label:
 				}
 				continue;
 			}
-			if (c == '\r') {	//遇到回车
+			if (c == '\r') {
 				printf("\n");
 				curx = 0;
 				cury++;
 
 				if (cury > winy - 2 || cury % (winy - 1) == winy - 2) {
-					//超过这一屏，向下翻页
 					if (cury % (winy - 1) == winy - 2)
 						printf("\n");
-					SetConsoleTextAttribute(handle_out, screen_info.wAttributes); // 恢复原来的属性
+					SetConsoleTextAttribute(handle_out, screen_info.wAttributes); 
 					int i;
 					for (i = 0; i < winx - 1; i++)
 						printf(" ");
@@ -1237,17 +1287,15 @@ label:
 			else {
 				printf("%c", c);
 			}
-			//移动光标
 			curx++;
 			if (curx == winx) {
 				curx = 0;
 				cury++;
 
 				if (cury > winy - 2 || cury % (winy - 1) == winy - 2) {
-					//超过这一屏，向下翻页
 					if (cury % (winy - 1) == winy - 2)
 						printf("\n");
-					SetConsoleTextAttribute(handle_out, screen_info.wAttributes); // 恢复原来的属性
+					SetConsoleTextAttribute(handle_out, screen_info.wAttributes);
 					int i;
 					for (i = 0; i < winx - 1; i++)
 						printf(" ");
@@ -1263,18 +1311,15 @@ label:
 					printf("\n");
 				}
 			}
-			//记录字符 
 			buf[cnt++] = c;
 			if (cnt > maxlen)
 				maxlen = cnt;
 		}
-		else {	//其他模式
+		else {
 		}
 	}
-	if (isExist) {	//如果是编辑模式
-		//将buf内容写回文件的磁盘块
-
-		if (((fileinode.mode >> filemode >> 1) & 1) == 1) {	//可写
+	if (isExist) {
+		if (((fileinode.mode >> filemode >> 1) & 1) == 1) {	
 			strcpy_s(fileEnt[position].buffer, buf);
 			fileinode.fileSize = strlen(buf);
 			fileinode.mtime = time(NULL);
@@ -1287,16 +1332,15 @@ label:
 			fflush(fw);
 			pthread_rwlock_unlock(&fileEnt[position].lock);
 		}
-		else {	//不可写
+		else {	
 			cout << "Permission denied." << endl;
 			pthread_rwlock_unlock(&fileEnt[position].lock);
 		}
 
 	}
-	else {	//是创建文件模式
+	else {	
 		if (((cur.mode >> filemode >> 1) & 1) == 1) {
-			//可写。可以创建文件
-			create(name, buf);	//创建文件
+			create(name, buf);
 		}
 		else {
 			cout << "Permission denied." << endl;
@@ -1326,14 +1370,16 @@ static void pwd()
 static void cat(char name[])
 {
 	int parinoaddr;
-	char tmpName[30], fileName[30];
-	if (strcmp(name, "") == 0) {
+	char tmpName[1024], fileName[1024];
+	if (strcmp(name, "") == 0||strcmp(name,".")==0) {
+		strcpy_s(fileName, Cur_Dir_Name);
 		parinoaddr = Cur_Dir_Addr;
 	}
 	else if (strcmp(name, "/") == 0) {
+		strcpy_s(fileName, Cur_Dir_Name);
 		parinoaddr = Root_Dir_Addr;
 	}
-	else if (strstr(name, "/")==nullptr) {
+	else if (strstr(name, "/") == nullptr) {
 		strcpy_s(fileName, extractLastPath(name));
 		parinoaddr = Cur_Dir_Addr;
 	}
@@ -1371,7 +1417,7 @@ static void cat(char name[])
 	fread(fileEnt, sizeof(fileEnt), 1, fr);
 	fflush(fr);
 	for (int i = 0; i < FILEENT_PER_BLOCK; i++) {
-		if (strcmp(fileEnt[i].dir.name , fileName)==0) {
+		if (strcmp(fileEnt[i].dir.name, fileName) == 0) {
 			pthread_rwlock_wrlock(&fileEnt[i].lock);
 			printf("%s\n", fileEnt[i].buffer);
 			pthread_rwlock_unlock(&fileEnt[i].lock);
@@ -1380,7 +1426,7 @@ static void cat(char name[])
 	}
 	pthread_rwlock_unlock(&(cur.lock));
 	return;
-} 
+}
 
 
 //cmd finish
@@ -1609,8 +1655,8 @@ static void inputPassword(char passwd[])
 static void Gotoxy(HANDLE hOut, int x, int y)
 {
 	COORD pos;
-	pos.X = x;            
-	pos.Y = y;        
+	pos.X = x;
+	pos.Y = y;
 	SetConsoleCursorPosition(hOut, pos);
 }
 
@@ -1624,10 +1670,10 @@ static bool check(char username[], char passwd[]) //todebug
 	inode shadow_Inode = { 0 };		//shadow inode
 	inode group_Inode = { 0 };		//group inode
 
-	char passwd_buf[256] = {0};
-	char shadow_buf[256] = {0};
-	char group_buf[256] = {0};
-	char tmpbuf[256] = {0};
+	char passwd_buf[256] = { 0 };
+	char shadow_buf[256] = { 0 };
+	char group_buf[256] = { 0 };
+	char tmpbuf[256] = { 0 };
 
 
 	inode cur = { 0 };
@@ -1669,7 +1715,7 @@ static bool check(char username[], char passwd[]) //todebug
 		return false;
 	}
 
-	char* p = {0};
+	char* p = { 0 };
 	if ((p = strstr(shadow_buf, username)) == nullptr) {
 		cout << "The user does not exist in the shadow file." << endl;
 		cd("/");	//回到根目录
@@ -1692,9 +1738,9 @@ static bool check(char username[], char passwd[]) //todebug
 		else
 			strcpy_s(Cur_Group_Name, "user");	//当前登陆用户组名
 		char tmp[25];
-		strcpy_s(tmp,"/home/");
+		strcpy_s(tmp, "/home/");
 		strcat_s(tmp, username);
-		cd(tmp); 
+		cd(tmp);
 		strcpy_s(Cur_User_Dir_Name, Cur_Dir_Name);	//复制当前登陆用户目录名
 		return true;
 	}
@@ -1703,7 +1749,7 @@ static bool check(char username[], char passwd[]) //todebug
 		cd("/");	//回到根目录
 		return false;
 	}
-}	
+}
 
 //gotoRoot finish
 static void gotoRoot()
@@ -1791,7 +1837,7 @@ static bool create(char name[], char buf[])
 		fwrite(&New, INODE_SIZE, 1, fw);
 		fseek(fw, parinoAddr, SEEK_SET);
 		fwrite(&cur, INODE_SIZE, 1, fw);
-		fseek(fw, cur.dirBlock[0],SEEK_SET);
+		fseek(fw, cur.dirBlock[0], SEEK_SET);
 		fwrite(fileEnt, sizeof(fileEnt), 1, fw);
 		fflush(fw);
 		return true;

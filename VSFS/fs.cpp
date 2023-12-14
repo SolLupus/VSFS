@@ -129,7 +129,7 @@ char* substring(char dir[],char name[]) {
 //parse path to inodeaddress
 //have some trouble in parse path like ../
 int extractPath(char path[]) {
-	char pathCopy[MAX_NAME_SIZE];
+	char pathCopy[1024];
 	strcpy_s(pathCopy, path);
 	inode tmp = { 0 };
 	FileEnt fileEnt[FILEENT_PER_BLOCK] = { 0 };
@@ -188,7 +188,7 @@ int extractPath(char path[]) {
 
 
 char* extractLastPath(char path[]) {
-	char pathCopy[MAX_NAME_SIZE];
+	char pathCopy[1024];
 	strcpy_s(pathCopy, path);
 
 
