@@ -108,9 +108,14 @@ bool BlockFree(int bnum) {
 
 char* substring(char dir[],char name[]) {
 	const char* found = strstr(dir, name);
-
+	if (strcmp(dir, "/") == 0) {
+		return dir;
+	}
+	else if (dir[strlen(dir)-1]=='/') {
+		return dir;
+	}
 	if (found != nullptr) {
-		size_t position = found - dir;  
+		size_t position = found - dir;		
 		char* result = new char[position + 1];  
 		strncpy(result, dir, position);  
 		result[position] = '\0';  
@@ -134,7 +139,7 @@ int extractPath(char path[]) {
 	inode tmp = { 0 };
 	FileEnt fileEnt[FILEENT_PER_BLOCK] = { 0 };
 	int address=0;
-	if (path[0] = '/') {
+	if (path[0] == '/') {
 		if (strlen(path) == 1) {
 			return Root_Dir_Addr;
 		}

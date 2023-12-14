@@ -406,6 +406,8 @@ static bool userdel(char username[])
 	return true;
 }
 
+//have bug in parse .. ../ below function
+//didn't support relative path
 //chmod finish 
 static void chmod(char name[], int pmode)
 {
@@ -910,7 +912,7 @@ static void ls(char name[])
 	}
 }
 
-//cd  privilege-need ** 路径显示有问题
+//cd  privilege-need **
 static void cd(char name[])
 {
 	if (strcmp(name, "") == 0) {
