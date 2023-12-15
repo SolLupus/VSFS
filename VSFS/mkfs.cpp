@@ -158,7 +158,7 @@ static bool Format() {
 	}
 	cur.IdirBlock = -1;
 	cur.mode = MODE_DIR | DIR_DEF_PERMISSION;
-	initLock(cur);
+	cur.mutex = 0;
 	fseek(fw, inoAddr, SEEK_SET);
 	fwrite(&cur, INODE_SIZE, 1, fw);
 	fflush(fw);

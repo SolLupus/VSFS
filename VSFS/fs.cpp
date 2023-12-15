@@ -5,31 +5,41 @@
 using namespace std;
 
 
-//ReadLock
-//read pthread_rwlock_rdlock(&(node.lock));
-// ...
-//pthread_rwlock_unlock(&(node.lock));
-
-//∂¡∂¡‘ –Ì°¢∂¡–¥ª•≥‚°¢–¥–¥ª•≥‚
-//WriteLock
-//pthread_rwlock_wrlock(&(node.lock));
-// ...
-//pthread_rwlock_unlock(&(node.lock));
-void initLock(inode node) {
-	pthread_rwlock_init(&(node.lock), NULL);
-}
-void destroyLock(inode node) {
-	pthread_rwlock_destroy(&(node.lock));
+//
+//inode write
+void iput(_iobuf* fpoint,inode& in, int address) {
+	in.mutex = in.mutex - 1;
+	fseek(fpoint, address, SEEK_SET);
+	fwrite(&in,INODE_SIZE,1, fpoint);
+	fflush(fpoint);
 }
 
-void initFileEntLock(FileEnt fileEnt)
-{
-	pthread_rwlock_init(&(fileEnt.lock), NULL);
+//inode read
+void iget(_iobuf* fpoint,inode& in, int address) {
+	in.mutex = in.mutex + 1;
+	fseek(fpoint, address, SEEK_SET);
+	fwrite(&in, INODE_SIZE, 1, fpoint);
+	fflush(fpoint);
 }
 
-void destroyFileEntLock(FileEnt fileEnt) {
-	pthread_rwlock_destroy(&(fileEnt.lock));
+
+//fileEnt write
+void fput(_iobuf* fpoint,FileEnt (&fileEnt)[FILEENT_PER_BLOCK], int address, int position) {
+	fileEnt[position].mutex = fileEnt[position].mutex - 1;
+	fseek(fpoint, address, SEEK_SET);
+	fwrite(&fileEnt, sizeof(fileEnt), 1, fpoint);
+	fflush(fpoint);
 }
+
+
+//fileEnt read
+void fget(_iobuf* fpoint,FileEnt (&fileEnt)[FILEENT_PER_BLOCK], int address, int position) {
+	fileEnt[position].mutex = fileEnt[position].mutex + 1;
+	fseek(fpoint, address, SEEK_SET);
+	fwrite(&fileEnt, sizeof(fileEnt), 1, fpoint);
+	fflush(fpoint);
+}
+
 
 
 // Allocate Inode

@@ -7,9 +7,8 @@
 #include <stdio.h>
 #include <pthread.h>
 using namespace std;
-
 //InitUser finish
-static void InitUser() //ok
+static void InitUser()
 {
 	cout << "Please type the root password!" << endl;
 	bool ok = false;
@@ -28,7 +27,7 @@ static void InitUser() //ok
 
 
 	mkdir("/home");
-	chmod("/home", 777);
+	chmod("/home", 0777);
 	mkdir("/home/root");
 
 	mkdir("/etc");
@@ -210,51 +209,64 @@ static bool useradd(char username[])
 		strcpy_s(Cur_Dir_Name, bak_Cur_Dir_Name);
 		return false;
 	}
-	pthread_rwlock_wrlock(&fileEnt->lock);
-	pthread_rwlock_wrlock(&passwd_Inode.lock);
+	if (passwd_Inode.mutex != 0 || fileEnt[passwd_position].mutex != 0) {
+		cout << "Target is in write-type;" << endl;
+		return false;
+	}
+	iget(fw,passwd_Inode, passwd_Inode_Addr);
+	fget(fw,fileEnt, cur.dirBlock[0],passwd_position);
+
+
 	sprintf(passwd_buf + strlen(passwd_buf), "%s:x:%d:%d\n", username, nextUID++, 1);
 	passwd_Inode.fileSize = strlen(passwd_buf);
 	strcpy(fileEnt[passwd_position].buffer, passwd_buf);
-	fseek(fw, passwd_Inode_Addr, SEEK_SET);
-	fwrite(&passwd_Inode, INODE_SIZE, 1, fw);
-	fflush(fw);
-	pthread_rwlock_unlock(&passwd_Inode.lock);
 
-	pthread_rwlock_wrlock(&shadow_Inode.lock);
+	iput(fw,passwd_Inode, passwd_Inode_Addr);
+	fput(fw,fileEnt, cur.dirBlock[0], passwd_position);
+
+
+	if (shadow_Inode.mutex != 0 || fileEnt[shadow_position].mutex != 0) {
+		cout << "Target is in write-type;" << endl;
+		return false;
+	}
+	iget(fw,shadow_Inode, shadow_Inode_Addr);
+	fget(fw,fileEnt, cur.dirBlock[0], shadow_position);
+
 	sprintf(shadow_buf + strlen(shadow_buf), "%s:%s\n", username, passwd);
 	shadow_Inode.fileSize = strlen(shadow_buf);
 	strcpy(fileEnt[shadow_position].buffer, shadow_buf);
-	fseek(fw, shadow_Inode_Addr, SEEK_SET);
-	fwrite(&shadow_Inode, INODE_SIZE, 1, fw);
-	fflush(fw);
-	pthread_rwlock_unlock(&shadow_Inode.lock);
 
-	pthread_rwlock_wrlock(&group_Inode.lock);
+	iput(fw,shadow_Inode, shadow_Inode_Addr);
+	fput(fw,fileEnt, cur.dirBlock[0], shadow_position);
+
+
+	if (group_Inode.mutex != 0 || fileEnt[group_position].mutex != 0) {
+		cout << "Target is in write-type;" << endl;
+		return false;
+	}
+	iget(fw,group_Inode, group_Inode_Addr);
+	fget(fw,fileEnt, cur.dirBlock[0], group_position);
+
 	if (group_buf[strlen(group_buf) - 2] == ':')
 		sprintf(group_buf + strlen(group_buf) - 1, "%s\n", username);
 	else
 		sprintf(group_buf + strlen(group_buf) - 1, ",%s\n", username);
 	group_Inode.fileSize = strlen(group_buf);
 	strcpy(fileEnt[group_position].buffer, group_buf);
-	fseek(fw, group_Inode_Addr, SEEK_SET);
-	fwrite(&group_Inode, INODE_SIZE, 1, fw);
-	fflush(fw);
-	pthread_rwlock_unlock(&group_Inode.lock);
 
-	fseek(fw, cur.dirBlock[0], SEEK_SET);
-	fwrite(&fileEnt, sizeof(fileEnt), 1, fw);
-	fflush(fw);
-	pthread_rwlock_unlock(&fileEnt->lock);
+	iput(fw,group_Inode, group_Inode_Addr);
+	fput(fw,fileEnt, cur.dirBlock[0], group_position);
+
 	strcpy_s(Cur_User_Name, bak_Cur_User_Name);
 	strcpy_s(Cur_User_Dir_Name, bak_Cur_User_Dir_Name);
 	Cur_Dir_Addr = bak_Cur_Dir_Addr;
 	strcpy_s(Cur_Dir_Name, bak_Cur_Dir_Name);
-
+	cd(Cur_Dir_Name);
 	cout << "Add user success." << endl;
 	return true;
 }
 
-//didn't test yet
+//userdel finish
 static bool userdel(char username[])
 {
 	if (strcmp(Cur_User_Name, "root") != 0) {
@@ -293,7 +305,6 @@ static bool userdel(char username[])
 
 	cd("/etc");
 	char passwd[100] = { 0 };
-	inputPassword(passwd);
 	fseek(fr, Cur_Dir_Addr, SEEK_SET);
 	fread(&cur, sizeof(inode), 1, fr);
 	fflush(fr);
@@ -334,7 +345,11 @@ static bool userdel(char username[])
 	}
 
 	//update passwd infomation
-	pthread_rwlock_wrlock(&passwd_Inode.lock);
+	if (passwd_Inode.mutex != 0) {
+		cout << "Target is in write-type;" << endl;
+		return false;
+	}
+	iget(fw,passwd_Inode, passwd_Inode_Addr);
 	char* p1 = strstr(passwd_buf, username);
 	*p1 = '\0';
 	while ((*p1) != '\n')
@@ -342,24 +357,26 @@ static bool userdel(char username[])
 	p1++;
 	strcat_s(passwd_buf, p1);
 	passwd_Inode.fileSize = strlen(passwd_buf);
-	fseek(fw, passwd_Inode_Addr, SEEK_SET);
-	fwrite(&passwd_Inode, INODE_SIZE, 1, fw);
-	fflush(fw);
-	pthread_rwlock_unlock(&passwd_Inode.lock);
+	iput(fw,passwd_Inode, passwd_Inode_Addr);
 
-	pthread_rwlock_wrlock(&shadow_Inode.lock);
+
+	if (shadow_Inode.mutex != 0) {
+		cout << "Target is in write-type;" << endl;
+		return false;
+	}
+	iget(fw,shadow_Inode, shadow_Inode_Addr);
 	char* p2 = strstr(shadow_buf, username);
 	*p2 = '\0';
 	while ((*p2) != '\n')
 		p2++;
 	p2++;
 	shadow_Inode.fileSize = strlen(shadow_buf);
-	fseek(fw, shadow_Inode_Addr, SEEK_SET);
-	fwrite(&shadow_Inode, INODE_SIZE, 1, fw);
-	fflush(fw);
-	pthread_rwlock_unlock(&shadow_Inode.lock);
-
-	pthread_rwlock_wrlock(&group_Inode.lock);
+	iput(fw,shadow_Inode, shadow_Inode_Addr);
+	if (group_Inode.mutex != 0) {
+		cout << "Target is in write-type;" << endl;
+		return false;
+	}
+	iget(fw,group_Inode, group_Inode_Addr);
 	char* p3 = strstr(group_buf, username);
 	*p3 = '\0';
 	while ((*p3) != '\n' && (*p3) != ',')
@@ -368,10 +385,8 @@ static bool userdel(char username[])
 		p3++;
 	strcat_s(group_buf, p3);
 	group_Inode.fileSize = strlen(group_buf);
-	fseek(fw, group_Inode_Addr, SEEK_SET);
-	fwrite(&group_Inode, INODE_SIZE, 1, fw);
-	fflush(fw);
-	pthread_rwlock_unlock(&group_Inode.lock);
+	iput(fw,group_Inode, group_Inode_Addr);
+
 
 	for (int i = 0; i < FILEENT_PER_BLOCK; i++) {
 		if (strcmp(fileEnt[i].dir.name, "passwd") == 0) {
@@ -389,14 +404,11 @@ static bool userdel(char username[])
 	fflush(fw);
 
 
-	char* tmp = strcat("/home/", username);
-	if (strcmp(Cur_Dir_Name, tmp) == 0) {
-		cd("/");
-		rm(tmp);
-	}
-	else
-		rm(tmp);
-
+	char tmp[1024];
+	strcpy(tmp, "/home/");
+	strcat(tmp, username);
+	rm(tmp);
+	cd(bak_Cur_Dir_Name);
 	cout << "User has deleted." << endl;
 	return true;
 }
@@ -412,7 +424,7 @@ static void chmod(char name[], int pmode)
 	int parinoaddr;
 	int address = 0;
 	inode fileinode = { 0 };
-	if (strcmp(name, "") == 0||strcmp(name,".")==0) {
+	if (strcmp(name, "") == 0 || strcmp(name, ".") == 0) {
 		strcpy(fileName, Cur_Dir_Name);
 		parinoaddr = Cur_Dir_Addr;
 	}
@@ -462,25 +474,33 @@ static void chmod(char name[], int pmode)
 			fseek(fr, fileEnt[i].dir.iaddr, SEEK_SET);
 			fread(&fileinode, sizeof(inode), 1, fr);
 			fflush(fr);
+			if (fileinode.mutex != 0) {
+				cout << "Taget is in write-type;" << endl;
+				return;
+			}
 			break;
 		}
 	}
 	if (strcmp(fileinode.uname, Cur_User_Name) == 0) {
-		pthread_rwlock_wrlock(&fileinode.lock);
+		if (fileinode.mutex != 0) {
+			cout << "Taget is in write-type;" << endl;
+			return;
+		}
+		iget(fw,fileinode, address);
 		fileinode.mode = (fileinode.mode >> 9 << 9) | pmode;
-		fseek(fw, address, SEEK_SET);
-		fwrite(&fileinode, INODE_SIZE, 1, fw);
-		fflush(fw);
-		pthread_rwlock_unlock(&fileinode.lock);
+		iput(fw,fileinode, address);
+
 		return;
 	}
 	else if (strcmp(fileinode.gname, Cur_Group_Name) == 0) {
-		pthread_rwlock_wrlock(&fileinode.lock);
+		if (fileinode.mutex != 0) {
+			cout << "Taget is in write-type;" << endl;
+			return;
+		}
+		iget(fw,fileinode, address);
 		fileinode.mode = (fileinode.mode >> 9 << 9) | pmode;
-		fseek(fw, address, SEEK_SET);
-		fwrite(&fileinode, INODE_SIZE, 1, fw);
-		fflush(fw);
-		pthread_rwlock_unlock(&fileinode.lock);
+		iput(fw,fileinode, address);
+
 		return;
 	}
 	else {
@@ -513,6 +533,7 @@ static void touch(char name[]) //ok
 	else {
 		strcpy_s(tmpName, name);
 		strcpy_s(FileName, extractLastPath(name));
+		strcpy_s(tmpName, substring(tmpName, FileName));
 		parinoAddr = extractPath(tmpName);
 	}
 	if (parinoAddr == -1) {
@@ -554,7 +575,7 @@ static void touch(char name[]) //ok
 			if (fileEnt[i].dir.iaddr == 0) {
 				fileEnt[i].dir.iaddr = newInodeAddress;
 				strcpy_s(fileEnt[i].dir.name, FileName);
-				initFileEntLock(fileEnt[i]);
+				fileEnt[i].mutex = 0;
 				break;
 			}
 			cnt = cnt + 1;
@@ -569,7 +590,7 @@ static void touch(char name[]) //ok
 		for (int i = 1; i < IPB; i++) {
 			New.dirBlock[i] = -1;
 		}
-		initLock(New);
+		New.mutex = 0;
 		New.fileSize = 0;
 		New.IdirBlock = -1;
 		New.mode = MODE_FILE | FILE_DEF_PERMISSION;
@@ -614,6 +635,7 @@ static bool mkdir(char name[])  //ok
 	else {
 		strcpy_s(tmpName, name);
 		strcpy_s(dirName, extractLastPath(name));
+		strcpy_s(tmpName, substring(tmpName, dirName));
 		parinoAddr = extractPath(tmpName);
 	}
 	if (parinoAddr == -1) {
@@ -655,7 +677,7 @@ static bool mkdir(char name[])  //ok
 		for (int i = 1; i < IPB; i++) {
 			New.dirBlock[i] = -1;
 		}
-		initLock(New);
+		New.mutex = 0;
 		New.fileSize = 0;
 		New.IdirBlock = -1;
 		New.mode = MODE_DIR | DIR_DEF_PERMISSION;
@@ -664,7 +686,7 @@ static bool mkdir(char name[])  //ok
 		New.atime = time(NULL);
 		New.ctime = time(NULL);
 		New.mtime = time(NULL);
-		
+
 
 		//check whehter there is same name file
 		for (int i = 0; i < FILEENT_PER_BLOCK; i++) {
@@ -691,10 +713,10 @@ static bool mkdir(char name[])  //ok
 		FileEnt newFileEnt[FILEENT_PER_BLOCK] = { 0 };
 		newFileEnt[0].dir = dir;
 		strcpy_s(newFileEnt[0].buffer, "");
-		initFileEntLock(newFileEnt[0]);
+		newFileEnt[0].mutex = 0;
 		newFileEnt[1].dir = curFileEnt[0].dir;
 		strcpy_s(newFileEnt[1].dir.name, "..");
-		initFileEntLock(newFileEnt[1]);
+		newFileEnt[1].mutex = 0;
 		fseek(fw, New.dirBlock[0], SEEK_SET);
 		fwrite(newFileEnt, sizeof(newFileEnt), 1, fw);
 		fseek(fw, dir.iaddr, SEEK_SET);
@@ -749,6 +771,14 @@ static bool rm(char name[])
 	fseek(fr, cur.dirBlock[0], SEEK_SET);
 	fread(fileEnt, sizeof(fileEnt), 1, fr);
 	fflush(fr);
+	if (strcmp(fileEnt[0].dir.name, fileName) == 0) {
+		fseek(fr, fileEnt[1].dir.iaddr, SEEK_SET);
+		fread(&cur, sizeof(inode), 1, fr);
+		fflush(fr);
+		fseek(fr, cur.dirBlock[0], SEEK_SET);
+		fread(fileEnt, sizeof(fileEnt), 1, fr);
+		fflush(fr);
+	}
 	//get fileinode
 	for (int i = 0; i < FILEENT_PER_BLOCK; i++) {
 		if (strcmp(fileEnt[i].dir.name, fileName) == 0) {
@@ -776,7 +806,7 @@ static bool rm(char name[])
 
 	if (((fileinode.mode >> 9) & 1) == 0) { //file
 		for (int i = 0; i < FILEENT_PER_BLOCK; i++) {
-			if (strcmp(fileEnt[i].dir.name, fileName)==0) {
+			if (strcmp(fileEnt[i].dir.name, fileName) == 0) {
 				fseek(fw, cur.dirBlock[0] + i * sizeof(FileEnt), SEEK_SET);
 				fwrite(&emptyfile, sizeof(FileEnt), 1, fw);
 				fseek(fw, address, SEEK_SET);
@@ -801,7 +831,7 @@ static bool rm(char name[])
 				diraddress = fileEnt[i].dir.iaddr;
 				fseek(fw, fileEnt[i].dir.iaddr, SEEK_SET);
 				fwrite(&empty, INODE_SIZE, 1, fw);
-				fileEnt[i] = {0};
+				fileEnt[i] = { 0 };
 				free_inode(superblock, imap, (fileEnt[i].dir.iaddr - Inode_StartAddr) / INODE_SIZE);
 			}
 		}
@@ -1006,6 +1036,8 @@ static void vim(char name[], char buf[])
 	fseek(fr, parinoAddr, SEEK_SET);
 	fread(&cur, sizeof(inode), 1, fr);
 	fflush(fr);
+
+
 	int filemode;
 	if (strcmp(Cur_User_Name, cur.uname) == 0)
 		filemode = 6;
@@ -1024,8 +1056,11 @@ static void vim(char name[], char buf[])
 			fread(&fileinode, sizeof(inode), 1, fr);
 			fflush(fr);
 			if (((fileinode.mode >> 9) & 1) == 0) {	//find the file ,go into edit mode
-				pthread_rwlock_wrlock(&fileEnt[i].lock);
-				fileInodeAddr = fileEnt[i].dir.iaddr;
+				if (fileinode.mutex != 0) {
+					cout << "Target is in write-type;" << endl;
+					return;
+				}
+				iget(fw,fileinode, fileEnt[i].dir.iaddr);
 				position = i;
 				isExist = true;
 				goto label;
@@ -1040,9 +1075,9 @@ label:
 
 	int winx, winy, curx, cury;
 
-	HANDLE handle_out;                        
-	CONSOLE_SCREEN_BUFFER_INFO screen_info;        
-	COORD pos = { 0, 0 };                         
+	HANDLE handle_out;
+	CONSOLE_SCREEN_BUFFER_INFO screen_info;
+	COORD pos = { 0, 0 };
 
 	if (isExist) {	//file exist got into edit mode
 
@@ -1058,21 +1093,21 @@ label:
 		maxlen = strlen(fileEnt[position].buffer);
 	}
 
-	handle_out = GetStdHandle(STD_OUTPUT_HANDLE);    
-	GetConsoleScreenBufferInfo(handle_out, &screen_info);   
+	handle_out = GetStdHandle(STD_OUTPUT_HANDLE);
+	GetConsoleScreenBufferInfo(handle_out, &screen_info);
 	winx = screen_info.srWindow.Right - screen_info.srWindow.Left + 1;
 	winy = screen_info.srWindow.Bottom - screen_info.srWindow.Top + 1;
 	curx = screen_info.dwCursorPosition.X;
 	cury = screen_info.dwCursorPosition.Y;
 
 
-	int mode = 0;	
+	int mode = 0;
 	unsigned char c;
 	while (1) {
-		if (mode == 0) {	
+		if (mode == 0) {
 			c = _getch();
 
-			if (c == 'i' || c == 'a') {	
+			if (c == 'i' || c == 'a') {
 				if (c == 'a') {
 					curx++;
 					if (curx == winx) {
@@ -1095,7 +1130,7 @@ label:
 				}
 				else {
 					Gotoxy(handle_out, 0, winy - 1);
-					SetConsoleTextAttribute(handle_out, screen_info.wAttributes); 
+					SetConsoleTextAttribute(handle_out, screen_info.wAttributes);
 					int i;
 					for (i = 0; i < winx - 1; i++)
 						printf(" ");
@@ -1119,7 +1154,7 @@ label:
 					pos.X = 0, pos.Y = cury + 1;
 				else
 					pos.X = 0, pos.Y = winy - 1;
-				SetConsoleTextAttribute(handle_out, screen_info.wAttributes); 
+				SetConsoleTextAttribute(handle_out, screen_info.wAttributes);
 				int i;
 				for (i = 0; i < winx - 1; i++)
 					printf(" ");
@@ -1131,7 +1166,7 @@ label:
 				printf(":");
 
 				char pc;
-				int tcnt = 1;	
+				int tcnt = 1;
 				while (c = _getch()) {
 					if (c == '\r') {
 						break;
@@ -1151,7 +1186,7 @@ label:
 				}
 				if (pc == 'q') {
 					buf[cnt] = '\0';
-					SetConsoleTextAttribute(handle_out, screen_info.wAttributes); 
+					SetConsoleTextAttribute(handle_out, screen_info.wAttributes);
 					system("cls");
 					break;
 				}
@@ -1160,7 +1195,7 @@ label:
 						Gotoxy(handle_out, 0, cury + 1);
 					else
 						Gotoxy(handle_out, 0, winy - 1);
-					SetConsoleTextAttribute(handle_out, screen_info.wAttributes); 
+					SetConsoleTextAttribute(handle_out, screen_info.wAttributes);
 					int i;
 					for (i = 0; i < winx - 1; i++)
 						printf(" ");
@@ -1170,7 +1205,7 @@ label:
 					else
 						Gotoxy(handle_out, 0, winy - 1);
 					printf("--  Command Error --");
-					SetConsoleTextAttribute(handle_out, screen_info.wAttributes); 
+					SetConsoleTextAttribute(handle_out, screen_info.wAttributes);
 					Gotoxy(handle_out, curx, cury);
 				}
 			}
@@ -1263,7 +1298,7 @@ label:
 						Gotoxy(handle_out, curx, cury);
 					}
 				}
-				else if (c == 77) {	
+				else if (c == 77) {
 					cnt++;
 					if (cnt > maxlen)
 						maxlen = cnt;
@@ -1297,7 +1332,7 @@ label:
 				if (cury > winy - 2 || cury % (winy - 1) == winy - 2) {
 					if (cury % (winy - 1) == winy - 2)
 						printf("\n");
-					SetConsoleTextAttribute(handle_out, screen_info.wAttributes); 
+					SetConsoleTextAttribute(handle_out, screen_info.wAttributes);
 					int i;
 					for (i = 0; i < winx - 1; i++)
 						printf(" ");
@@ -1346,27 +1381,28 @@ label:
 		}
 	}
 	if (isExist) {
-		if (((fileinode.mode >> filemode >> 1) & 1) == 1) {	
+		if (((fileinode.mode >> filemode >> 1) & 1) == 1 || strcmp(Cur_User_Name, "root") == 0) {
 			strcpy_s(fileEnt[position].buffer, buf);
 			fileinode.fileSize = strlen(buf);
 			fileinode.mtime = time(NULL);
-			fseek(fw, fileEnt[position].dir.iaddr, SEEK_SET);
-			fwrite(&fileinode, sizeof(fileinode), 1, fw);
+			iput(fw,fileinode, fileEnt[position].dir.iaddr);
 			fseek(fw, cur.dirBlock[0], SEEK_SET);
 			fwrite(fileEnt, sizeof(fileEnt), 1, fw);
 			fseek(fw, parinoAddr, SEEK_SET);
 			fwrite(&cur, sizeof(inode), 1, fw);
 			fflush(fw);
-			pthread_rwlock_unlock(&fileEnt[position].lock);
+
 		}
-		else {	
+		else {
 			cout << "Permission denied." << endl;
-			pthread_rwlock_unlock(&fileEnt[position].lock);
+			iput(fw,fileinode, fileEnt[position].dir.iaddr);
 		}
 
 	}
-	else {	
-		if (((cur.mode >> filemode >> 1) & 1) == 1) {
+	else {
+		if (((cur.mode >> filemode >> 1) & 1) == 1 || strcmp(Cur_User_Name, "root") == 0) {
+			if (strlen(buf) == 0)
+				return;
 			create(name, buf);
 		}
 		else {
@@ -1398,7 +1434,7 @@ static void cat(char name[])
 {
 	int parinoaddr;
 	char tmpName[1024], fileName[1024];
-	if (strcmp(name, "") == 0||strcmp(name,".")==0) {
+	if (strcmp(name, "") == 0 || strcmp(name, ".") == 0) {
 		strcpy_s(fileName, Cur_Dir_Name);
 		parinoaddr = Cur_Dir_Addr;
 	}
@@ -1423,7 +1459,6 @@ static void cat(char name[])
 	fseek(fr, parinoaddr, SEEK_SET);
 	fread(&cur, sizeof(inode), 1, fr);
 	fflush(fr);
-	pthread_rwlock_rdlock(&(cur.lock));
 
 	int filemode;
 	if (strcmp(Cur_User_Name, cur.uname) == 0)
@@ -1436,24 +1471,30 @@ static void cat(char name[])
 	if (((cur.mode >> filemode >> 2) & 1) == 0) {
 		if (strcmp(Cur_User_Name, "root")) {
 			cout << "Permission Denied" << endl;
-			pthread_rwlock_unlock(&(cur.lock));
 			return;
 		}
 	}
 
 	FileEnt fileEnt[FILEENT_PER_BLOCK] = { 0 };
+	inode fileInode = { 0 };
 	fseek(fr, cur.dirBlock[0], SEEK_SET);
 	fread(fileEnt, sizeof(fileEnt), 1, fr);
 	fflush(fr);
 	for (int i = 0; i < FILEENT_PER_BLOCK; i++) {
 		if (strcmp(fileEnt[i].dir.name, fileName) == 0) {
-			pthread_rwlock_wrlock(&fileEnt[i].lock);
-			printf("%s\n", fileEnt[i].buffer);
-			pthread_rwlock_unlock(&fileEnt[i].lock);
+			fseek(fr, fileEnt[i].dir.iaddr, SEEK_SET);
+			fread(&fileInode, sizeof(inode), 1, fr);
+			fflush(fr);
+			if (fileInode.mutex == 0)
+			{
+				printf("%s\n", fileEnt[i].buffer);
+			}
+			else {
+				cout << "Taget is in write-type" << endl;
+			}
 			break;
 		}
 	}
-	pthread_rwlock_unlock(&(cur.lock));
 	return;
 }
 
@@ -1852,7 +1893,7 @@ static bool create(char name[], char buf[])
 		for (int i = 1; i < IPB; i++) {
 			New.dirBlock[i] = -1;
 		}
-		initLock(New);
+		New.mutex = 0;
 		New.fileSize = strlen(buf);
 		New.IdirBlock = -1;
 		New.mode = MODE_FILE | FILE_DEF_PERMISSION;

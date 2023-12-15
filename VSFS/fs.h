@@ -70,7 +70,7 @@ struct SuperBlock
 };
 
 struct inode{ 
-	pthread_rwlock_t lock;
+	int mutex;			//whether there is write operation 0-none 1-yes
 	uint mode;			//Privilege For File r-read w-write x-exec
 	uint inum;			//inode number 
 	uint fileSize;		//Size of File
@@ -97,7 +97,7 @@ struct Dirent {				//32B
 struct FileEnt {				//256B     dirent(32B) + file_content(224B);
 	Dirent dir;
 	char buffer[MAX_FILE_SIZE];
-	pthread_rwlock_t lock;
+	int mutex;						//whether there is write operation 0-none 1-yes
 };
 
 
@@ -134,10 +134,10 @@ bool BlockFree(int address);				//free block
 bool InodeFree(int address);				//free inode
 int extractPath(char path[]);				//path parser -> return target inodeaddress
 char* extractLastPath(char path[]);
-void initLock(inode node);
-void destroyLock(inode node);
-void initFileEntLock(FileEnt fileEnt);
-void destroyFileEntLock(FileEnt fileEnt);
+void iput(_iobuf* fpoint,inode& in, int address);
+void iget(_iobuf* fpoint,inode& in, int address);
+void fput(_iobuf* fpoint, FileEnt(&fileEnt)[FILEENT_PER_BLOCK], int address,int position);
+void fget(_iobuf* fpoint, FileEnt(&fileEnt)[FILEENT_PER_BLOCK], int address,int position);
 char* substring(char dir[], char name[]);
 
 void Help_NotLogin();
