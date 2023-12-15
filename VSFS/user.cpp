@@ -28,6 +28,7 @@ static void InitUser() //ok
 
 
 	mkdir("/home");
+	chmod("/home", 777);
 	mkdir("/home/root");
 
 	mkdir("/etc");
@@ -104,7 +105,7 @@ static void logout()
 	isLogin = false;
 }
 
-//have bug in mkdir user dir ,the main reason is the global arg Cur_User_Name,to solve it should correct process it; **
+//useradd finish
 static bool useradd(char username[])
 {
 	if (strcmp(Cur_User_Name, "root") != 0) {
@@ -117,6 +118,11 @@ static bool useradd(char username[])
 	inode passwd_Inode = { 0 };		//passwd inode
 	inode shadow_Inode = { 0 };		//shadow inode
 	inode group_Inode = { 0 };		//group inode
+	int passwd_position = 0;
+	int shadow_position = 0;
+	int group_position = 0;
+
+
 
 	char bak_Cur_User_Name[110];
 	char bak_Cur_User_Name_2[110];
@@ -173,18 +179,21 @@ static bool useradd(char username[])
 	for (int i = 0; i < FILEENT_PER_BLOCK; i++) {
 		if (strcmp(fileEnt[i].dir.name, "passwd") == 0) {
 			passwd_Inode_Addr = fileEnt[i].dir.iaddr;
+			passwd_position = i;
 			fseek(fr, fileEnt[i].dir.iaddr, SEEK_SET);
 			fread(&passwd_Inode, sizeof(inode), 1, fr);
 			strcpy_s(passwd_buf, fileEnt[i].buffer);
 		}
 		if (strcmp(fileEnt[i].dir.name, "shadow") == 0) {
 			shadow_Inode_Addr = fileEnt[i].dir.iaddr;
+			shadow_position = i;
 			fseek(fr, fileEnt[i].dir.iaddr, SEEK_SET);
 			fread(&shadow_Inode, sizeof(inode), 1, fr);
 			strcpy_s(shadow_buf, fileEnt[i].buffer);
 		}
 		if (strcmp(fileEnt[i].dir.name, "group") == 0) {
 			group_Inode_Addr = fileEnt[i].dir.iaddr;
+			group_position = i;
 			fseek(fr, fileEnt[i].dir.iaddr, SEEK_SET);
 			fread(&group_Inode, sizeof(inode), 1, fr);
 			strcpy_s(group_buf, fileEnt[i].buffer);
@@ -201,10 +210,11 @@ static bool useradd(char username[])
 		strcpy_s(Cur_Dir_Name, bak_Cur_Dir_Name);
 		return false;
 	}
-
+	pthread_rwlock_wrlock(&fileEnt->lock);
 	pthread_rwlock_wrlock(&passwd_Inode.lock);
 	sprintf(passwd_buf + strlen(passwd_buf), "%s:x:%d:%d\n", username, nextUID++, 1);
 	passwd_Inode.fileSize = strlen(passwd_buf);
+	strcpy(fileEnt[passwd_position].buffer, passwd_buf);
 	fseek(fw, passwd_Inode_Addr, SEEK_SET);
 	fwrite(&passwd_Inode, INODE_SIZE, 1, fw);
 	fflush(fw);
@@ -213,6 +223,7 @@ static bool useradd(char username[])
 	pthread_rwlock_wrlock(&shadow_Inode.lock);
 	sprintf(shadow_buf + strlen(shadow_buf), "%s:%s\n", username, passwd);
 	shadow_Inode.fileSize = strlen(shadow_buf);
+	strcpy(fileEnt[shadow_position].buffer, shadow_buf);
 	fseek(fw, shadow_Inode_Addr, SEEK_SET);
 	fwrite(&shadow_Inode, INODE_SIZE, 1, fw);
 	fflush(fw);
@@ -224,13 +235,16 @@ static bool useradd(char username[])
 	else
 		sprintf(group_buf + strlen(group_buf) - 1, ",%s\n", username);
 	group_Inode.fileSize = strlen(group_buf);
+	strcpy(fileEnt[group_position].buffer, group_buf);
 	fseek(fw, group_Inode_Addr, SEEK_SET);
 	fwrite(&group_Inode, INODE_SIZE, 1, fw);
 	fflush(fw);
 	pthread_rwlock_unlock(&group_Inode.lock);
 
-
-
+	fseek(fw, cur.dirBlock[0], SEEK_SET);
+	fwrite(&fileEnt, sizeof(fileEnt), 1, fw);
+	fflush(fw);
+	pthread_rwlock_unlock(&fileEnt->lock);
 	strcpy_s(Cur_User_Name, bak_Cur_User_Name);
 	strcpy_s(Cur_User_Dir_Name, bak_Cur_User_Dir_Name);
 	Cur_Dir_Addr = bak_Cur_Dir_Addr;
@@ -277,25 +291,6 @@ static bool userdel(char username[])
 	bak_Cur_Dir_Addr = Cur_Dir_Addr;
 	strcpy_s(bak_Cur_Dir_Name, Cur_Dir_Name);
 
-	cd("/home");
-	strcpy_s(bak_Cur_User_Name_2, Cur_User_Name);
-	strcpy_s(bak_Cur_Group_Name, Cur_Group_Name);
-	strcpy_s(Cur_User_Name, username);
-	strcpy_s(Cur_Group_Name, "user");
-	if (!mkdir(username)) {
-		strcpy_s(Cur_User_Name, bak_Cur_User_Name_2);
-		strcpy_s(Cur_Group_Name, bak_Cur_Group_Name);
-		strcpy_s(Cur_User_Name, bak_Cur_User_Name);
-		strcpy_s(Cur_User_Dir_Name, bak_Cur_User_Dir_Name);
-		Cur_Dir_Addr = bak_Cur_Dir_Addr;
-		strcpy_s(Cur_Dir_Name, bak_Cur_Dir_Name);
-
-		cout << "Add user failure." << endl;
-		return false;
-	}
-	strcpy_s(Cur_User_Name, bak_Cur_User_Name_2);
-	strcpy_s(Cur_Group_Name, bak_Cur_Group_Name);
-
 	cd("/etc");
 	char passwd[100] = { 0 };
 	inputPassword(passwd);
@@ -329,8 +324,8 @@ static bool userdel(char username[])
 	}
 	fflush(fr);
 
-	if (strstr(passwd_buf, username) != nullptr) {
-		cout << "The user has already existed." << endl;
+	if (strstr(passwd_buf, username) == nullptr) {
+		cout << "The user didn't existed." << endl;
 		strcpy_s(Cur_User_Name, bak_Cur_User_Name);
 		strcpy_s(Cur_User_Dir_Name, bak_Cur_User_Dir_Name);
 		Cur_Dir_Addr = bak_Cur_Dir_Addr;
@@ -455,8 +450,10 @@ static void chmod(char name[], int pmode)
 		filemode = 0;
 
 	if (((cur.mode >> filemode >> 1) & 1) == 0) {
-		cout << "Permission Denied" << endl;
-		return;
+		if (strcmp(Cur_User_Name, "root")) {
+			cout << "Permission Denied" << endl;
+			return;
+		}
 	}
 
 	for (int i = 0; i < FILEENT_PER_BLOCK; i++) {
@@ -540,8 +537,10 @@ static void touch(char name[]) //ok
 		filemode = 0;
 
 	if (((cur.mode >> filemode >> 1) & 1) == 0) {
-		cout << "Permission Denied" << endl;
-		return;
+		if (strcmp(Cur_User_Name, "root")) {
+			cout << "Permission Denied" << endl;
+			return;
+		}
 	}
 
 	int newInodeAddress = InodeAlloc();
@@ -638,8 +637,10 @@ static bool mkdir(char name[])  //ok
 		filemode = 0;
 
 	if (((cur.mode >> filemode >> 1) & 1) == 0) {
-		cout << "Permission Denied" << endl;
-		return false;
+		if (strcmp(Cur_User_Name, "root")) {
+			cout << "Permission Denied" << endl;
+			return false;
+		}
 	}
 	//new dirent
 	int blockAddress = BlockAlloc();
@@ -767,8 +768,10 @@ static bool rm(char name[])
 		filemode = 0;
 
 	if (((fileinode.mode >> filemode >> 1) & 1) == 0) {
-		cout << "Permission Denied" << endl;
-		return false;
+		if (strcmp(Cur_User_Name, "root")) {
+			cout << "Permission Denied" << endl;
+			return false;
+		}
 	}
 
 	if (((fileinode.mode >> 9) & 1) == 0) { //file
@@ -860,8 +863,10 @@ static void ls(char name[])
 		filemode = 0;
 
 	if (((cur.mode >> filemode >> 2) & 1) == 0) {
-		cout << "Permission Denied" << endl;
-		return;
+		if (strcmp(Cur_User_Name, "root")) {
+			cout << "Permission Denied" << endl;
+			return;
+		}
 	}
 
 	for (int i = 0; i < FILEENT_PER_BLOCK; i++) {
@@ -1043,8 +1048,10 @@ label:
 
 		//privilege check
 		if (((fileinode.mode >> filemode >> 2) & 1) == 0) {
-			cout << "Permission denied." << endl;
-			return;
+			if (strcmp(Cur_User_Name, "root")) {
+				cout << "Permission Denied" << endl;
+				return;
+			}
 		}
 
 		printf("%s", fileEnt[position].buffer);
@@ -1427,9 +1434,11 @@ static void cat(char name[])
 		filemode = 0;
 
 	if (((cur.mode >> filemode >> 2) & 1) == 0) {
-		cout << "Permission Denied" << endl;
-		pthread_rwlock_unlock(&(cur.lock));
-		return;
+		if (strcmp(Cur_User_Name, "root")) {
+			cout << "Permission Denied" << endl;
+			pthread_rwlock_unlock(&(cur.lock));
+			return;
+		}
 	}
 
 	FileEnt fileEnt[FILEENT_PER_BLOCK] = { 0 };

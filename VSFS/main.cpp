@@ -31,7 +31,7 @@ char Cur_User_Name[110];
 char Cur_Group_Name[110];					
 char Cur_User_Dir_Name[310];				
 int nextUID;								
-int nextGID;								
+int nextGID;		
 
 
 

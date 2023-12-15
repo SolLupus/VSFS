@@ -17,18 +17,18 @@ static void InitSystem() {
 		fw = fopen(FILESYSNAME, "wb");
 		if (fw == NULL) {
 			cout << "Virtual disk file open failure." << endl;
-			return;	//打开文件失败
+			return;	
 		}
 		fr = fopen(FILESYSNAME, "rb");
 
-		//初始化变量
+		//init variable
 		nextUID = 0;
 		nextGID = 0;
 		isLogin = false;
 		strcpy_s(Cur_User_Name, "root");
 		strcpy_s(Cur_Group_Name, "root");
 
-		//获取主机名
+		//get hostname
 		memset(Cur_Host_Name, 0, sizeof(Cur_Host_Name));
 		DWORD k = 100;
 		GetComputerName((LPTSTR)Cur_Host_Name, &k);
@@ -203,13 +203,11 @@ static void Ready()
 		}
 	}
 
-	// 初始化用户，创建目录及配置文件
+	// init user
 	InitUser();
 
-	//printf("载入文件系统……\n");
 	if (!Install()) {
 		cout << "Failed to install file system." << endl;
 		return;
 	}
-	//printf("载入完成\n");
 }
