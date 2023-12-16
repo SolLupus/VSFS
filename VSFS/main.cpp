@@ -25,7 +25,7 @@ char Sys_buffer[SYS_SIZE] = { 0 };
 bool isLogin;								
 int Root_Dir_Addr;							
 int Cur_Dir_Addr;							
-char Cur_Dir_Name[310];						
+char Cur_Dir_Name[1024];						
 char Cur_Host_Name[110];					
 char Cur_User_Name[110];					
 char Cur_Group_Name[110];					

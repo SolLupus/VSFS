@@ -116,7 +116,7 @@ extern int nextUID;							//next uid
 extern int nextGID;							//next group id
 extern int Root_Dir_Addr;					//address of root inode
 extern int Cur_Dir_Addr;					//current dictionary
-extern char Cur_Dir_Name[310];				//current dictionaryName
+extern char Cur_Dir_Name[1024];				//current dictionaryName
 extern char Cur_Host_Name[110];				//current hostName
 extern char Cur_User_Name[110];				//current userName
 extern char Cur_Group_Name[110];			//current groupName
@@ -138,6 +138,8 @@ void iput(_iobuf* fpoint,inode& in, int address);
 void iget(_iobuf* fpoint,inode& in, int address);
 void fput(_iobuf* fpoint, FileEnt(&fileEnt)[FILEENT_PER_BLOCK], int address,int position);
 void fget(_iobuf* fpoint, FileEnt(&fileEnt)[FILEENT_PER_BLOCK], int address,int position);
+char* replaceDoubleDot(char* original, const char* replacement);
+void truncatePath(char* basePath, const char* subPath);
 char* substring(char dir[], char name[]);
 
 void Help_NotLogin();

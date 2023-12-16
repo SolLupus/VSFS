@@ -42,9 +42,11 @@ static void InitSystem() {
 			return;
 		}
 		cout << "Format complete." << endl;
-
+		
+		//Init User System
 		InitUser();
 
+		//Get data
 		if (!Install()) {
 			cout << "Failed to install file system." << endl;
 			return;
@@ -75,6 +77,7 @@ static void InitSystem() {
 		Cur_Dir_Addr = Root_Dir_Addr;
 		strcpy_s(Cur_Dir_Name, "/");
 
+		//Get data
 		if (!Install()) {
 			cout << "Failed to install file system." << endl;
 			return;
@@ -163,51 +166,4 @@ static bool Format() {
 	fwrite(&cur, INODE_SIZE, 1, fw);
 	fflush(fw);
 	return true;
-}
-
-//didn't use it
-static void Ready()	
-{
-	nextUID = 0;
-	nextGID = 0;
-	isLogin = false;
-	strcpy_s(Cur_User_Name, "root");
-	strcpy_s(Cur_Group_Name, "root");
-
-	memset(Cur_Host_Name, 0, sizeof(Cur_Host_Name));
-	DWORD k = 100;
-	GetComputerName((LPWSTR)Cur_Host_Name, &k);
-
-	Root_Dir_Addr = Inode_StartAddr;	
-	Cur_Dir_Addr = Root_Dir_Addr;
-	strcpy_s(Cur_Dir_Name, "/");
-
-
-	char c;
-	cout << "Do you want to format? [y/n] ";
-	while (c = getchar()) {
-		fflush(stdin);
-		if (c == 'y') {
-			printf("\n");
-			cout << endl << "The file system is being formatted......" << endl;
-			if (!Format()) {
-				cout << "Format failur." << endl;
-				return;
-			}
-			cout << "Format complete." << endl;
-			break;
-		}
-		else if (c == 'n') {
-			printf("\n");
-			break;
-		}
-	}
-
-	// init user
-	InitUser();
-
-	if (!Install()) {
-		cout << "Failed to install file system." << endl;
-		return;
-	}
 }

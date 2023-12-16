@@ -945,7 +945,7 @@ static void ls(char name[])
 	}
 }
 
-//cd  privilege-need ** 路径显示有问题
+//cd finish
 static void cd(char name[])
 {
 	if (strcmp(name, "") == 0) {
@@ -963,15 +963,17 @@ static void cd(char name[])
 	if (strcmp(name, "~") == 0) {
 		strcpy(name, Cur_User_Dir_Name);
 	}
-	char tmpName[1024], dirName[1024];
+	char tmpName[1024], dirName[1024], tmp[1024],Name[1024];
+	strcpy(tmp, "/");
+	strcpy(Name, name);
 	strcpy_s(tmpName, name);
 	strcpy_s(dirName, extractLastPath(name));
 	strcpy_s(tmpName, substring(tmpName, dirName));
 	int parinoaddr = extractPath(tmpName);
 
 	if (parinoaddr != -1) {
-		inode cur = { 0 };
-		FileEnt fileEnt[FILEENT_PER_BLOCK] = { 0 };
+		inode cur,tmpinode = { 0 };
+		FileEnt fileEnt[FILEENT_PER_BLOCK],tmpfileEnt[FILEENT_PER_BLOCK] = {0};
 		fseek(fr, parinoaddr, SEEK_SET);
 		fread(&cur, sizeof(inode), 1, fr);
 		fflush(fr);
@@ -984,12 +986,46 @@ static void cd(char name[])
 		fflush(fr);
 		for (int i = 0; i < FILEENT_PER_BLOCK; i++) {
 			if (strcmp(dirName, fileEnt[i].dir.name) == 0) {
-				if (strcmp(tmpName, "/"))
-					strcpy_s(Cur_Dir_Name, strcat(tmpName, "/"));
-				else
-					strcpy_s(Cur_Dir_Name, tmpName);
-				strcat(Cur_Dir_Name, fileEnt[i].dir.name);
-				Cur_Dir_Addr = fileEnt[i].dir.iaddr;
+				if (Name[0]=='/') {			//base on root dir
+					if (strstr(Name, "..") != nullptr) {
+						strcpy(Name,replaceDoubleDot(Name, ""));
+					}
+					if (Name[strlen(Name) - 1] == '/') {
+						Name[strlen(Name) - 1] = '\0';
+						strcpy(Cur_Dir_Name, Name);
+					}
+					else {
+						strcpy(Cur_Dir_Name, Name);
+					}
+				}
+				else {						//base on current dir
+					if (strstr(Name, "..") != nullptr) {		//proccess relative path 
+						fseek(fr, fileEnt[1].dir.iaddr, SEEK_SET);
+						fread(&tmpinode, sizeof(inode), 1, fr);
+						fflush(fr);
+						fseek(fr, tmpinode.dirBlock[0], SEEK_SET);
+						fread(&tmpfileEnt, sizeof(tmpfileEnt), 1, fr);
+						fflush(fr);
+						if (strcmp(Name, "..") == 0|| strcmp(Name, "../") == 0) {
+							truncatePath(Cur_Dir_Name, tmpfileEnt[0].dir.name);
+							Cur_Dir_Addr = fileEnt[i].dir.iaddr;
+							return;
+						}
+						strcpy(Name, replaceDoubleDot(Name, tmpfileEnt[0].dir.name));
+					}
+					if (Name[strlen(Name) - 1]=='/') {			//last character is /
+						Name[strlen(Name) - 1] = '\0';
+						if(strcmp(Cur_Dir_Name,"/"))
+							strcat(Cur_Dir_Name, tmp);
+						strcat(Cur_Dir_Name, Name);
+					}
+					else {
+						if (strcmp(Cur_Dir_Name, "/"))
+							strcat(Cur_Dir_Name, tmp);
+						strcat(Cur_Dir_Name, Name);
+					}
+				}
+ 				Cur_Dir_Addr = fileEnt[i].dir.iaddr;
 				return;
 			}
 		}
@@ -1107,7 +1143,9 @@ label:
 		if (mode == 0) {
 			c = _getch();
 
-			if (c == 'i' || c == 'a') {
+
+			//insert mode
+			if (c == 'i' || c == 'a') { 
 				if (c == 'a') {
 					curx++;
 					if (curx == winx) {
@@ -1144,6 +1182,7 @@ label:
 
 
 			}
+			//command mode to input command
 			else if (c == ':') {
 				if (cury - winy + 2 > 0)
 					Gotoxy(handle_out, 0, cury + 1);
@@ -1184,6 +1223,7 @@ label:
 					printf("%c", pc);
 					tcnt++;
 				}
+				//quit vim
 				if (pc == 'q') {
 					buf[cnt] = '\0';
 					SetConsoleTextAttribute(handle_out, screen_info.wAttributes);
@@ -1380,7 +1420,9 @@ label:
 		else {
 		}
 	}
+	//if Exist then to edit ,otherwise create it if content is not empty
 	if (isExist) {
+		//privilege check
 		if (((fileinode.mode >> filemode >> 1) & 1) == 1 || strcmp(Cur_User_Name, "root") == 0) {
 			strcpy_s(fileEnt[position].buffer, buf);
 			fileinode.fileSize = strlen(buf);
@@ -1914,7 +1956,7 @@ static bool create(char name[], char buf[])
 	}
 }
 
-
+//help not login
 static void Help_NotLogin() {
 	Command_help();
 	Login_help();

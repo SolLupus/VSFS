@@ -5,8 +5,8 @@
 using namespace std;
 
 
-//
-//inode write
+//Atomic operation
+//After-write for inode
 void iput(_iobuf* fpoint,inode& in, int address) {
 	in.mutex = in.mutex - 1;
 	fseek(fpoint, address, SEEK_SET);
@@ -14,7 +14,7 @@ void iput(_iobuf* fpoint,inode& in, int address) {
 	fflush(fpoint);
 }
 
-//inode read
+//Pre-write for inode
 void iget(_iobuf* fpoint,inode& in, int address) {
 	in.mutex = in.mutex + 1;
 	fseek(fpoint, address, SEEK_SET);
@@ -23,7 +23,7 @@ void iget(_iobuf* fpoint,inode& in, int address) {
 }
 
 
-//fileEnt write
+//After-write for fileEnt
 void fput(_iobuf* fpoint,FileEnt (&fileEnt)[FILEENT_PER_BLOCK], int address, int position) {
 	fileEnt[position].mutex = fileEnt[position].mutex - 1;
 	fseek(fpoint, address, SEEK_SET);
@@ -32,7 +32,7 @@ void fput(_iobuf* fpoint,FileEnt (&fileEnt)[FILEENT_PER_BLOCK], int address, int
 }
 
 
-//fileEnt read
+//Pre-write for fileEnt 
 void fget(_iobuf* fpoint,FileEnt (&fileEnt)[FILEENT_PER_BLOCK], int address, int position) {
 	fileEnt[position].mutex = fileEnt[position].mutex + 1;
 	fseek(fpoint, address, SEEK_SET);
@@ -116,6 +116,8 @@ bool BlockFree(int bnum) {
 	return true;
 }
 
+//get substring
+//example: get /home/ from /home/root
 char* substring(char dir[],char name[]) {
 	const char* found = strstr(dir, name);
 	if (strcmp(dir, "/") == 0) {
@@ -142,7 +144,7 @@ char* substring(char dir[],char name[]) {
 }
 
 //parse path to inodeaddress
-//have some trouble in parse path like ../
+//example : get root indode address from /home/root
 int extractPath(char path[]) {
 	char pathCopy[1024];
 	strcpy_s(pathCopy, path);
@@ -201,7 +203,58 @@ int extractPath(char path[]) {
 }
 
 
+//parse path to sub one
+//example: from /home/root to /home
+void truncatePath(char* basePath, const char* subPath) {
+	char* found = strstr(basePath, subPath);
 
+	if (!found) {
+		return;
+	}
+	size_t newLen = found - basePath +strlen(subPath);
+
+	basePath[newLen] = '\0';
+}
+
+
+//replace .. to specific path
+//example: replace .. to home
+char* replaceDoubleDot(char* original, const char* replacement) {
+	char* found = strstr(original, "..");
+
+	if (!found) {
+		return original;
+	}
+
+	size_t replacement_len = strlen(replacement);
+	size_t original_len = strlen(original);
+
+
+	size_t new_len = original_len - 1 + replacement_len;
+	char* new_str = (char*)malloc(new_len + 1);
+
+	if (!new_str) {
+		return original;
+	}
+
+	strncpy(new_str, original, found - original);
+
+	strncpy(new_str + (found - original), replacement, replacement_len);
+
+
+	strcpy(new_str + (found - original) + replacement_len, found + 2);
+
+	return new_str;
+
+
+	free(new_str);
+
+	replaceDoubleDot(original + (found - original) + replacement_len, replacement);
+}
+
+
+//get the last name of path 
+//example:  get passwd from /etc/passwd
 char* extractLastPath(char path[]) {
 	char pathCopy[1024];
 	strcpy_s(pathCopy, path);
