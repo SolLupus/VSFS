@@ -92,6 +92,202 @@ static bool login(char username[]) //ok
 	}
 }
 
+//su finish
+static bool su(char username[]) //ok
+{
+	char password[100] = { 0 };
+
+	if (strlen(username) >= MAX_NAME_SIZE) {
+		cout << "The username is too long." << endl;
+		return false;
+	}
+
+	if (strcmp(username, "") == 0) {
+		inputUsername(username);
+		if (strcmp(username, "") == 0) {
+			cout << "Username can not be empty." << endl;
+			return false;
+		}
+	}
+
+	inputPassword(password);
+	if (strcmp(password, "") == 0) {
+		cout << "Password can not be empty." << endl;
+		return false;
+	}
+
+	if (check(username, password)) {
+		isLogin = true;
+		return true;
+	}
+	else {
+		return false;
+	}
+}
+
+//rename finish
+static void rename(char name[], char newName[])
+{
+	char tmpName[1024], fileName[1024];
+	int parinoaddr;
+	int address = 0;
+	if (strcmp(name, "") == 0 || strcmp(name, ".") == 0) {
+		strcpy_s(fileName, Cur_Dir_Name);
+		parinoaddr = Cur_Dir_Addr;
+	}
+	else if (strcmp(name, "/") == 0) {
+		strcpy_s(fileName, Cur_Dir_Name);
+		parinoaddr = Root_Dir_Addr;
+	}
+	else if (strstr(name, "/") == nullptr) {
+		strcpy_s(fileName, extractLastPath(name));
+		parinoaddr = Cur_Dir_Addr;
+	}
+	else {
+		strcpy_s(tmpName, name);
+		strcpy_s(fileName, extractLastPath(name));
+		parinoaddr = extractPath(tmpName);
+	}
+	if (parinoaddr == -1) {
+		cout << "No such file or dictionary." << endl;
+		return;
+	}
+	char  buf[1024];
+	inode empty = { 0 };
+	FileEnt emptyfile = { 0 };
+	FileEnt tmp = { 0 };
+	inode fileinode = { 0 };
+	//get current dir inode
+	inode cur = { 0 };
+	fseek(fr, parinoaddr, SEEK_SET);
+	fread(&cur, sizeof(inode), 1, fr);
+	fflush(fr);
+	FileEnt fileEnt[FILEENT_PER_BLOCK] = { 0 };
+	fseek(fr, cur.dirBlock[0], SEEK_SET);
+	fread(fileEnt, sizeof(fileEnt), 1, fr);
+	fflush(fr);
+	for (int i = 0; i < FILEENT_PER_BLOCK; i++) {
+		if (strcmp(fileEnt[i].dir.name, fileName) == 0) {
+			strcpy(fileEnt[i].dir.name, newName);
+		}
+	}
+	fseek(fw, cur.dirBlock[0], SEEK_SET);
+	fwrite(fileEnt, sizeof(fileEnt), 1, fw);
+	fflush(fw);
+	return;
+}
+
+//mv finish
+static void mv(char name[], char newPath[])
+{
+	char tmpName[1024], fileName[1024];
+	int parinoaddr;
+	int address = 0;
+	if (strcmp(name, "") == 0 || strcmp(name, ".") == 0) {
+		strcpy_s(fileName, Cur_Dir_Name);
+		parinoaddr = Cur_Dir_Addr;
+	}
+	else if (strcmp(name, "/") == 0) {
+		strcpy_s(fileName, Cur_Dir_Name);
+		parinoaddr = Root_Dir_Addr;
+	}
+	else if (strstr(name, "/") == nullptr) {
+		strcpy_s(fileName, extractLastPath(name));
+		parinoaddr = Cur_Dir_Addr;
+	}
+	else {
+		strcpy_s(tmpName, name);
+		strcpy_s(fileName, extractLastPath(name));
+		parinoaddr = extractPath(tmpName);
+	}
+	if (parinoaddr == -1) {
+		cout << "No such file or dictionary." << endl;
+		return;
+	}
+	char  buf[1024];
+	inode empty = { 0 };
+	FileEnt emptyfile = { 0 };
+	inode fileinode = { 0 };
+	//get current dir inode
+	inode cur = { 0 };
+	fseek(fr, parinoaddr, SEEK_SET);
+	fread(&cur, sizeof(inode), 1, fr);
+	fflush(fr);
+	FileEnt fileEnt[FILEENT_PER_BLOCK] = { 0 };
+	fseek(fr, cur.dirBlock[0], SEEK_SET);
+	fread(fileEnt, sizeof(fileEnt), 1, fr);
+	fflush(fr);
+	for (int i = 0; i < FILEENT_PER_BLOCK; i++) {
+		if (strcmp(fileEnt[i].dir.name, fileName) == 0) {
+			strcpy(buf, fileEnt[i].buffer);
+		}
+	}
+	if (create(newPath, buf) && rm(name)) {
+		cout << "move file success" << endl;
+		return;
+	}
+	else {
+		cout << "move file failed" << endl;
+		return;
+	}
+}
+
+//cp finish
+static void cp(char name[], char newPath[])
+{
+	char tmpName[1024], fileName[1024];
+	int parinoaddr;
+	int address = 0;
+	if (strcmp(name, "") == 0 || strcmp(name, ".") == 0) {
+		strcpy_s(fileName, Cur_Dir_Name);
+		parinoaddr = Cur_Dir_Addr;
+	}
+	else if (strcmp(name, "/") == 0) {
+		strcpy_s(fileName, Cur_Dir_Name);
+		parinoaddr = Root_Dir_Addr;
+	}
+	else if (strstr(name, "/") == nullptr) {
+		strcpy_s(fileName, extractLastPath(name));
+		parinoaddr = Cur_Dir_Addr;
+	}
+	else {
+		strcpy_s(tmpName, name);
+		strcpy_s(fileName, extractLastPath(name));
+		parinoaddr = extractPath(tmpName);
+	}
+	if (parinoaddr == -1) {
+		cout << "No such file or dictionary." << endl;
+		return;
+	}
+	char  buf[1024];
+	inode empty = { 0 };
+	FileEnt emptyfile = { 0 };
+	FileEnt tmp = { 0 };
+	inode fileinode = { 0 };
+	//get current dir inode
+	inode cur = { 0 };
+	fseek(fr, parinoaddr, SEEK_SET);
+	fread(&cur, sizeof(inode), 1, fr);
+	fflush(fr);
+	FileEnt fileEnt[FILEENT_PER_BLOCK] = { 0 };
+	fseek(fr, cur.dirBlock[0], SEEK_SET);
+	fread(fileEnt, sizeof(fileEnt), 1, fr);
+	fflush(fr);
+	for (int i = 0; i < FILEENT_PER_BLOCK; i++) {
+		if (strcmp(fileEnt[i].dir.name, fileName) == 0) {
+			strcpy(buf, fileEnt[i].buffer);
+		}
+	}
+	if (create(newPath, buf)) {
+		cout << "copy file success." << endl;
+		return;
+	}
+	else {
+		cout << "copy file fail" << endl;
+		return;
+	}
+}
+
 //logout finish
 static void logout()
 {
@@ -1585,6 +1781,38 @@ static void cmd(char cmdline[])
 				login(inputParameter);
 			}
 		}
+		else if (strcmp(inputCommand, "rename") == 0) {
+			if (strcmp(inputCommand, "--help") == 0) {
+				Rename_help();
+			}
+			else {
+				rename(inputParameter, inputParameter2);
+			}
+		}
+		else if (strcmp(inputCommand, "cp") == 0) {
+			if (strcmp(inputCommand, "--help") == 0) {
+				Cp_help();
+			}
+			else {
+				cp(inputParameter, inputParameter2);
+			}
+		}
+		else if (strcmp(inputCommand, "mv") == 0) {
+			if (strcmp(inputCommand, "--help") == 0) {
+				Mv_help();
+			}
+			else {
+				mv(inputParameter, inputParameter2);
+			}
+		}
+		else if (strcmp(inputCommand, "su") == 0) {
+			if (strcmp(inputCommand, "--help") == 0) {
+				Su_help();
+			}
+			else {
+				su(inputParameter);
+			}
+		}
 		else if (strcmp(inputCommand, "logout") == 0) {
 			if (strcmp(inputCommand, "--help") == 0) {
 				Logout_help();
@@ -1875,16 +2103,18 @@ static void gotoRoot()
 //create finish
 static bool create(char name[], char buf[])
 {
+	int parinoAddr;
+	char tmpName[1024], FileName[1024];
 	if (strlen(name) > FILENAME_MAX) {
 		cout << "File name too long." << endl;
 		return false;
 	}
-	int parinoAddr;
-	char tmpName[30], FileName[30];
-	if (strcmp(name, "") == 0) {
+	if (strcmp(name, "") == 0 || strcmp(name, ".") == 0) {
+		strcpy(FileName, Cur_Dir_Name);
 		parinoAddr = Cur_Dir_Addr;
 	}
 	else if (strcmp(name, "/") == 0) {
+		strcpy(FileName, Cur_Dir_Name);
 		parinoAddr = Root_Dir_Addr;
 	}
 	else if (strstr(name, "/") == nullptr) {
@@ -1894,12 +2124,21 @@ static bool create(char name[], char buf[])
 	else {
 		strcpy_s(tmpName, name);
 		strcpy_s(FileName, extractLastPath(name));
+		strcpy_s(tmpName, substring(tmpName, FileName));
 		parinoAddr = extractPath(tmpName);
 	}
 	if (parinoAddr == -1) {
 		cout << "Can't touch file at Non-existent path." << endl;
 		return false;
 	}
+	inode cur = { 0 };
+	fseek(fr, parinoAddr, SEEK_SET);
+	fread(&cur, sizeof(inode), 1, fr);
+	fflush(fr);
+	FileEnt fileEnt[FILEENT_PER_BLOCK] = { 0 };
+	fseek(fr, cur.dirBlock[0], SEEK_SET);
+	fread(fileEnt, sizeof(fileEnt), 1, fr);
+	fflush(fr);
 
 	int newInodeAddress = InodeAlloc();
 	if (newInodeAddress == -1) {
@@ -1916,6 +2155,12 @@ static bool create(char name[], char buf[])
 		fread(fileEnt, sizeof(fileEnt), 1, fr);
 		fflush(fr);
 		int cnt = 1;
+		for (int i = 0; i < FILEENT_PER_BLOCK; i++) {
+			if (strcmp(fileEnt[i].dir.name,FileName)==0) {
+				cout << "File has already exist." << endl;
+				return false;
+			}
+		}
 		for (int i = 0; i < FILEENT_PER_BLOCK; i++) {
 			if (fileEnt[i].dir.iaddr == 0) {
 				fileEnt[i].dir.iaddr = newInodeAddress;
@@ -1971,22 +2216,20 @@ static void help()
 
 	Useradd_help();
 	Userdel_help();
-
-	Login_help();
+	Rename_help();
 	Logout_help();
-
+	Cp_help();
 	Cat_help();
 	Touch_help();
 	Rm_help();
 	Vim_help();
 	Chmod_help();
-
+	Mv_help();
 	Ls_help();
 	Cd_help();
 	Pwd_help();
 	Mkdir_help();
-	Rmdir_help();
-
+	Su_help();
 	Clear_help();
 	Exit_help();
 }
@@ -2016,9 +2259,6 @@ static void Rm_help() {
 static void Mkdir_help() {
 	cout << "mkdir [directoryName] : Create subdirectory" << endl;
 }
-static void Rmdir_help() {
-	cout << "rmdir [directoryName] : Delete subdirectory" << endl;
-}
 static void Cd_help() {
 	cout << "cd [directoryName] : Change current directory" << endl;
 }
@@ -2047,4 +2287,16 @@ static void CommandError(char command[])
 {
 	printf("%s: missing operand\n", command);
 	printf("Try '%s --help' for more information.\n", command);
+}
+static void Su_help() {
+	cout << "su ([username]): Shift to user [username]" << endl;
+}
+static void Mv_help() {
+	cout << "mv [fileName] [newPath/filename]:mv taget to new position" << endl;
+}
+static void Cp_help() {
+	cout << "cp [fileName] [newPath/newfilename]: Copy file to new one" << endl;
+}
+static void Rename_help() {
+	cout << "rename [fileName] [NewName]: rename file or dir" << endl;
 }

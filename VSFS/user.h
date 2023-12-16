@@ -5,7 +5,10 @@
 bool login(char[]);											
 void logout();												
 bool useradd(char username[]);								
-bool userdel(char username[]);								
+bool userdel(char username[]);
+void rename(char name[], char newName[]);
+void mv(char name[], char newPath[]);
+void cp(char name[], char newPath[]);
 void chmod(char name[], int pmode);			
 void touch(char name[]);		
 bool mkdir(char name[]);										
@@ -17,6 +20,10 @@ void clear();
 void pwd();													
 void cat(char name[]);
 void cmd(char cmdline[]);
+bool su(char username[]);
+void rename(char name[], char newName[]);
+void mv(char name[], char newPath[]);
+void cp(char name[], char newPath[]);
 
 
 void inputUsername(char username[]);							
@@ -36,20 +43,19 @@ void Userdel_help();
 
 void Login_help();
 void Logout_help();
-
+void Su_help();
 void Pwd_help();
 void Mkdir_help();
-void Rmdir_help();
 void Cd_help();
 void Ls_help();
 void Chmod_help();
-
+void Mv_help();
 void Clear_help();
 void Exit_help();
-
+void Cp_help();
 void Cat_help();
 void Touch_help();
 void Rm_help();
 void Vim_help();
-
+void Rename_help();
 #endif // !USER_H
