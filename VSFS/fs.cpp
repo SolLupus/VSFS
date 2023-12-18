@@ -274,3 +274,4 @@ char* extractLastPath(char path[]) {
 
 	return "";
 }
+

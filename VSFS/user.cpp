@@ -2139,7 +2139,20 @@ static bool create(char name[], char buf[])
 	fseek(fr, cur.dirBlock[0], SEEK_SET);
 	fread(fileEnt, sizeof(fileEnt), 1, fr);
 	fflush(fr);
+	int filemode;
+	if (strcmp(Cur_User_Name, cur.uname) == 0)
+		filemode = 6;
+	else if (strcmp(Cur_Group_Name, cur.gname) == 0)
+		filemode = 3;
+	else
+		filemode = 0;
 
+	if (((cur.mode >> filemode >> 2) & 1) == 0) {
+		if (strcmp(Cur_User_Name, "root")) {
+			cout << "Permission Denied" << endl;
+			return false;
+		}
+	}
 	int newInodeAddress = InodeAlloc();
 	if (newInodeAddress == -1) {
 		cout << "No empty space." << endl;
