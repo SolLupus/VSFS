@@ -8,5 +8,3 @@
 
 ​	数据访问路径，路径解析获得inode路径，根据inode路径找到物理块地址，然后block获得想要的信息。
 
-![image-20231218145042150](E:\Study\操作系统\课设\OS2\VSFS\README.assets\image-20231218145042150.png)
-
